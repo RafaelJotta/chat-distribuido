@@ -1,40 +1,70 @@
-import { useEffect, useState } from 'react';
-import { Message, SystemStatus } from '../types';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { Message, SystemStatus, HierarchyNode, User } from '../types';
 
-export const useWebSocket = () => {
+type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
+
+export const useWebSocket = (
+setHierarchy: SetState<HierarchyNode[]>, setMessages: SetState<Message[]>, p0: boolean) => {
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
-    status: 'connected',
-    message: 'Conectado',
+    status: 'reconnecting',
+    message: 'Conectando...',
   });
   const [showNotification, setShowNotification] = useState(false);
+  const ws = useRef<WebSocket | null>(null);
 
-  useEffect(() => {
-    // Simulate connection issues and recovery
-    const simulateConnectionIssues = () => {
-      // After 10 seconds, simulate connection issues
-      setTimeout(() => {
-        setSystemStatus({
-          status: 'reconnecting',
-          message: 'Reconectando... Rota de comunicação instável.',
-        });
+  const connect = useCallback(() => {
+    const wsUrl = `ws://${window.location.host}/ws`;
+    ws.current = new WebSocket(wsUrl);
 
-        // After 5 more seconds, simulate recovery
-        setTimeout(() => {
-          setSystemStatus({
-            status: 'connected',
-            message: 'Conectado',
-          });
-          setShowNotification(true);
-        }, 5000);
-      }, 10000);
+    ws.current.onopen = () => {
+      console.log('Conectado ao WebSocket via Gateway');
+      setSystemStatus({ status: 'connected', message: 'Conectado' });
     };
 
-    simulateConnectionIssues();
+    ws.current.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'initialState') {
+        setHierarchy(data.payload.hierarchy);
+        setMessages(data.payload.messages.map((m: any) => ({...m, timestamp: new Date(m.timestamp)})));
+      } else if (data.type === 'message' || data.type === 'userJoined') {
+        setMessages((prev) => [...prev, {...data, timestamp: new Date(data.timestamp)}]);
+      }
+      // Adicionar lógica para outros tipos de mensagem aqui (ex: 'typing')
+    };
+
+    ws.current.onerror = (error) => {
+      console.error('Erro no WebSocket:', error);
+      setSystemStatus({ status: 'disconnected', message: 'Desconectado' });
+    };
+
+    ws.current.onclose = () => {
+      console.log('WebSocket desconectado. Tentando reconectar em 3s...');
+      setSystemStatus({
+        status: 'reconnecting',
+        message: 'Reconectando...',
+      });
+      setTimeout(connect, 3000);
+    };
+  }, [setHierarchy, setMessages]);
+  
+  useEffect(() => {
+    connect();
+    return () => {
+      ws.current?.close();
+    };
+  }, [connect]);
+
+  const sendMessage = useCallback((message: Omit<Message, 'id' | 'timestamp'>) => {
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify(message));
+    }
   }, []);
 
   return {
     systemStatus,
     showNotification,
     setShowNotification,
+    sendMessage,
   };
 };

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, Shield, ArrowRight } from 'lucide-react';
+import { User } from '../types';
 
 interface LoginScreenProps {
-  onLogin: (email: string, password: string) => void;
+  onLogin: (user: User) => void;
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
@@ -10,19 +11,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    // Simulate authentication delay
-    setTimeout(() => {
-      onLogin(email, password);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.ok) {
+        const userData: User = await response.json();
+        onLogin(userData);
+      } else {
+        setError('Credenciais inválidas. Verifique seu email e senha.');
+      }
+    } catch (err) {
+      setError('Não foi possível conectar ao servidor. Tente novamente.');
+      console.error(err);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
-  return (
+  // ... (o resto do código JSX do LoginScreen que seu amigo fez é o mesmo)
+  // Cole o return (...) do arquivo original dele aqui.
+return (
     <div className="min-h-screen bg-slate-900 relative overflow-hidden flex items-center justify-center">
       {/* Animated Background */}
       <div className="absolute inset-0">
@@ -188,4 +207,5 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       </div>
     </div>
   );
+
 };

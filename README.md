@@ -1,78 +1,46 @@
-# Frontend - Chat Distribuído
+# Chat Empresarial com Inteligência Distribuída
 
-Este é o frontend do projeto **Chat Distribuído**, desenvolvido com **React + TypeScript**, utilizando **Vite** como bundler e **TailwindCSS** para estilização.  
-O projeto também faz uso de ícones com **Lucide React** e possui integração preparada com **Supabase**.
-
----
-
-## 🚀 Tecnologias utilizadas
-
-- [React 18](https://react.dev/) – Biblioteca para construção da interface.
-- [TypeScript](https://www.typescriptlang.org/) – Superset tipado do JavaScript.
-- [Vite](https://vitejs.dev/) – Ferramenta de build e servidor de desenvolvimento rápido.
-- [TailwindCSS](https://tailwindcss.com/) – Framework utilitário para estilização.
-- [Lucide React](https://lucide.dev/) – Biblioteca de ícones em React.
-- [Supabase JS](https://supabase.com/) – Cliente para integração com backend em Supabase.
+Este projeto combina um frontend moderno e profissional, desenvolvido com **React + TypeScript + Vite**, com um backend robusto de microsserviços em **Python (FastAPI)**, orquestrado com **Docker Compose** e exposto através de um **API Gateway (Nginx)**.
 
 ---
 
-## 📦 Pré-requisitos
+## 🚀 Tecnologias
 
-- [Node.js](https://nodejs.org/) **>= 18**  
-- [npm](https://www.npmjs.com/) (já vem junto com o Node)
+- **Frontend**: React 18, TypeScript, Vite, TailwindCSS, Lucide React
+- **Backend**: Python, FastAPI, Uvicorn
+- **API Gateway**: Nginx
+- **Orquestração**: Docker & Docker Compose
 
 ---
 
-## ⚙️ Instalação e execução
+## ⚙️ Como Executar o Projeto Completo
 
-1. Instale as dependências:
+**Pré-requisitos:**
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e em execução.
+- [Node.js](https://nodejs.org/) >= 18 (para o seu editor de código entender o TypeScript).
+
+**Passos:**
+
+1.  **Crie a Estrutura de Pastas:** Crie todas as pastas e arquivos exatamente como descrito no guia.
+2.  **Abra o Terminal:** Navegue até a pasta raiz do projeto (`chat-distribuido`).
+3.  **Execute o Docker Compose:**
     ```bash
-    npm install
+    docker-compose up --build
     ```
-2. Inicie o servidor de desenvolvimento:
-    ```bash
-    npm run dev
-    ```
-    O site estará disponível em:  
-    👉 http://localhost:5173
+    Na primeira vez, o Docker irá baixar e construir todas as imagens. Isso pode levar alguns minutos. Nas próximas vezes, será bem mais rápido.
+
+4.  **Acesse a Aplicação:**
+    Abra seu navegador e acesse:
+    👉 **http://localhost:8080**
+
+**Credenciais para Login:**
+- **Email:** `adm@empresa.com`
+- **Senha:** `adm`
 
 ---
 
-## 🛠️ Scripts disponíveis
+## 🛠️ Para Parar a Aplicação
 
-- `npm run dev` → Inicia o servidor de desenvolvimento.
-- `npm run build` → Cria a build otimizada para produção (saída em `/dist`).
-- `npm run preview` → Roda um servidor local para visualizar a build final.
-- `npm run lint` → Executa o ESLint para análise do código.
-
----
-
-## 📂 Estrutura recomendada
-
-```
-Frontend/
-├── src/               # Código-fonte do projeto
-├── public/            # Arquivos estáticos públicos
-├── package.json       # Configurações e dependências
-├── tsconfig.json      # Configuração do TypeScript
-├── tailwind.config.js
-└── vite.config.ts
-```
-
----
-
-## 📝 Observações
-
-- A pasta `node_modules/` não deve ser versionada (já está no `.gitignore`).
-- Para instalar novas dependências, use:
-  ```bash
-  npm install nome-da-biblioteca
-  ```
-
----
-
-## 🔗 Integração com o backend distribuído
-
-A comunicação entre o frontend e o backend distribuído será realizada via **API REST** e/ou **WebSockets**, permitindo o envio e recebimento de mensagens em tempo real. A integração está preparada para utilizar o Supabase como backend, mas pode ser adaptada conforme a arquitetura do sistema distribuído.
-
----
+1.  Vá para o terminal onde os contêineres estão rodando.
+2.  Pressione `Ctrl + C`.
+3.  (Opcional) Para remover os contêineres e a rede, rode: `docker-compose down`.

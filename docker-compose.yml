@@ -1,0 +1,39 @@
+services:
+  # API Gateway é o ponto de entrada único
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:80"
+    depends_on:
+      - frontend
+      - servico-autenticacao
+      - servico-mensagens
+
+  # Serviço de Autenticação em Python
+  servico-autenticacao:
+    build:
+      context: ./backend/servico-autenticacao
+    expose:
+      - "18080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Serviço de Mensagens em Python com WebSocket
+  servico-mensagens:
+    build:
+      context: ./backend/servico-mensagens
+    expose:
+      - "18081"
+    depends_on:
+      servico-autenticacao:
+        condition: service_healthy
+
+  # Frontend React servido por Nginx
+  frontend:
+    build:
+      context: ./frontend
+    expose:
+      - "80"

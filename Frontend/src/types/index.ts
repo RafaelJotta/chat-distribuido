@@ -6,7 +6,9 @@ export interface User {
   status: 'online' | 'away' | 'offline';
 }
 
+// Interface de mensagem agora tem um campo 'type' opcional para o WebSocket
 export interface Message {
+  type: 'message' | 'userJoined' | 'typing';
   id: string;
   senderId: string;
   senderName: string;

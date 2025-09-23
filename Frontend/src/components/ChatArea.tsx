@@ -1,8 +1,9 @@
 import React from 'react';
 import { Megaphone, Users, AlertCircle } from 'lucide-react';
-import { MessageBubble } from './MessageBubble';
-import { MessageComposer } from './MessageComposer';
-import { Message, Channel } from '../types';
+// CORREÇÃO: Adicionada a extensão .tsx nos imports dos componentes
+import { MessageBubble } from './MessageBubble.tsx';
+import { MessageComposer } from './MessageComposer.tsx';
+import { Message, Channel } from '../types/index.ts';
 
 interface ChatAreaProps {
   activeChannel: Channel | null;
@@ -47,7 +48,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             <h2 className="font-semibold text-white">{activeChannel.name}</h2>
             <p className="text-sm text-gray-400">
               {activeChannel.canSendMessage 
-                ? `Canal de comunicação hierárquica - ${activeChannel.members.length} destinatários` 
+                ? `Canal de comunicação hierárquica` 
                 : 'Visualização de avisos recebidos'
               }
             </p>
@@ -96,8 +97,6 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           <div className="text-center text-gray-500 text-sm">
             <AlertCircle className="w-4 h-4 mx-auto mb-2" />
             Você não tem permissão para enviar avisos neste canal.
-            <br />
-            Apenas superiores hierárquicos podem enviar comunicados.
           </div>
         </div>
       )}

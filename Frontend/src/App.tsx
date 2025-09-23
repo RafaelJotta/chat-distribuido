@@ -1,139 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import { LoginScreen } from './components/LoginScreen';
-import { Sidebar } from './components/Sidebar';
-import { ChatArea } from './components/ChatArea';
-import { SystemNotification } from './components/SystemNotification';
-import { useWebSocket } from './hooks/useWebSocket';
-import { currentUser, hierarchyNodes, channels, mockMessages } from './data/mockData';
-import { Message, Channel, HierarchyNode } from './types';
+import React, { useState } from 'react';
+// CORREÇÃO: Padronizada a capitalização dos nomes dos componentes para PascalCase (ex: Sidebar)
+import { LoginScreen } from './components/LoginScreen.tsx';
+import { Sidebar } from './components/Sidebar.tsx';
+import { ChatArea } from './components/ChatArea.tsx';
+import { SystemNotification } from './components/SystemNotification.tsx';
+import { useWebSocket } from './hooks/useWebSocket.ts';
+import { Message, Channel, HierarchyNode, User } from './types/index.ts';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [hierarchy, setHierarchy] = useState<HierarchyNode[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  
   const [selectedNode, setSelectedNode] = useState<HierarchyNode | null>(null);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
-  const { systemStatus, showNotification, setShowNotification } = useWebSocket();
 
-  const handleLogin = (email: string, password: string) => {
-    // Simple authentication check for demo
-    if (email === 'adm@empresa.com' && password === 'adm') {
-      setIsAuthenticated(true);
-    } else {
-      alert('Credenciais inválidas. Use: adm@empresa.com / adm');
-    }
+  const { systemStatus, showNotification, setShowNotification, sendMessage } = useWebSocket(setHierarchy, setMessages, !!currentUser);
+
+  const handleLogin = (loggedInUser: User) => {
+    setCurrentUser(loggedInUser);
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setSelectedNode(null);
-    setActiveChannel(null);
-    setMessages(mockMessages);
+    setCurrentUser(null);
+    // A lógica no hook useWebSocket irá lidar com a desconexão
   };
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
 
   const handleNodeSelect = (node: HierarchyNode) => {
+    if (!currentUser) return;
     setSelectedNode(node);
     
-    // Determine what channel the current user can send to based on hierarchy
     let targetChannel: Channel | null = null;
-    
     if (currentUser.role === 'director') {
-      // Directors can send to managers or supervisors
-      if (node.role === 'manager' || (node.role === 'director' && node.children)) {
-        targetChannel = {
-          id: 'announcements-managers',
-          name: 'Canal de Avisos - Gerentes',
-          type: 'announcement' as const,
-          members: hierarchyNodes[0].children?.map(child => child.id) || [],
-          targetLevel: 'manager' as const,
-          canSendMessage: true,
-        };
-      } else if (node.role === 'supervisor') {
-        targetChannel = {
-          id: 'announcements-supervisors', 
-          name: 'Canal de Avisos - Supervisores',
-          type: 'announcement' as const,
-          members: hierarchyNodes[0].children?.flatMap(child => 
-            child.children?.map(grandchild => grandchild.id) || []
-          ) || [],
-          targetLevel: 'supervisor' as const,
-          canSendMessage: true,
-        };
-      }
+        targetChannel = { id: `avisos-${node.role}-${node.id}`, name: `Avisos para ${node.name}`, type: 'announcement', members: [], targetLevel: node.role, canSendMessage: true };
     } else if (currentUser.role === 'manager') {
-      // Managers can send to their supervisors
-      if (node.role === 'supervisor') {
-        const currentManager = hierarchyNodes[0].children?.find(mgr => 
-          mgr.children?.some(sup => sup.id === currentUser.id)
-        );
-        targetChannel = {
-          id: `announcements-supervisors-${currentManager?.id}`,
-          name: `Canal de Avisos - Supervisores (${currentManager?.name})`,
-          type: 'announcement' as const,
-          members: currentManager?.children?.map(child => child.id) || [],
-          targetLevel: 'supervisor' as const,
-          canSendMessage: true,
-        };
-      }
+        if(node.role === 'supervisor') {
+            targetChannel = { id: `avisos-sup-${node.id}`, name: `Avisos para Supervisores`, type: 'announcement', members: [], targetLevel: 'supervisor', canSendMessage: true };
+        }
     } else {
-      // Supervisors can only view, not send
-      targetChannel = {
-        id: 'view-only',
-        name: `Avisos Recebidos`,
-        type: 'announcement' as const,
-        members: [currentUser.id],
-        targetLevel: 'supervisor' as const,
-        canSendMessage: false,
-      };
+       targetChannel = { id: 'view-only', name: `Avisos Recebidos`, type: 'announcement', members: [], targetLevel: 'supervisor', canSendMessage: false };
     }
-    
     setActiveChannel(targetChannel);
   };
 
   const handleSendMessage = (content: string, priority: 'normal' | 'urgent') => {
-    if (!activeChannel?.canSendMessage) {
-      alert('Você não tem permissão para enviar mensagens neste canal.');
-      return;
-    }
+    if (!currentUser || !activeChannel?.canSendMessage) return;
 
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
+    const newMessage = {
+      type: 'message' as const,
       senderId: currentUser.id,
       senderName: currentUser.name,
       senderRole: currentUser.role,
       content,
-      timestamp: new Date(),
       priority,
     };
-
-    setMessages(prev => [...prev, newMessage]);
-
-    // Simulate acknowledgment from subordinates
-    if (currentUser.role === 'director' && activeChannel.targetLevel === 'manager') {
-      setTimeout(() => {
-        const aiResponse: Message = {
-          id: `msg-${Date.now()}-ai`,
-          senderId: 'mgr-1',
-          senderName: 'Alessandro Augusto',
-          senderRole: 'manager',
-          content: 'Aviso recebido e compreendido. Vamos implementar as diretrizes.',
-          originalContent: 'Notice received and understood. We will implement the guidelines.',
-          timestamp: new Date(),
-          priority: 'normal',
-          isTranslated: true,
-        };
-        setMessages(prev => [...prev, aiResponse]);
-      }, 2000);
-    }
+    sendMessage(newMessage);
   };
+
+  if (!currentUser) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
 
   return (
     <div className="h-screen bg-slate-900 text-white flex">
       <Sidebar
         currentUser={currentUser}
-        hierarchyNodes={hierarchyNodes}
+        hierarchyNodes={hierarchy}
         systemStatus={systemStatus}
         onNodeSelect={handleNodeSelect}
         selectedNodeId={selectedNode?.id}
@@ -148,7 +80,7 @@ function App() {
       />
 
       <SystemNotification
-        message="Conexão restaurada através de um nó temporário. O sistema permanece operacional."
+        message="Conexão restaurada. O sistema permanece operacional."
         show={showNotification}
         onClose={() => setShowNotification(false)}
       />

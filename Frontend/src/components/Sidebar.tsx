@@ -1,8 +1,9 @@
 import React from 'react';
 import { User, Settings, LogOut, Bell, Shield, Palette } from 'lucide-react';
-import { HierarchyTree } from './HierarchyTree';
-import { StatusIndicator } from './StatusIndicator';
-import { User as UserType, SystemStatus, HierarchyNode } from '../types';
+// CORREÇÃO: Adicionada a extensão .tsx nos imports dos componentes
+import { HierarchyTree } from './HierarchyTree.tsx';
+import { StatusIndicator } from './StatusIndicator.tsx';
+import { User as UserType, SystemStatus, HierarchyNode } from '../types/index.ts';
 
 interface SidebarProps {
   currentUser: UserType;
