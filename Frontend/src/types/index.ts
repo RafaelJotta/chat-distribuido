@@ -3,8 +3,10 @@
 export interface User {
   id: string;
   name: string;
+  email: string;
+  password?: string;
   avatar: string;
-  role: 'director' | 'manager' | 'supervisor';
+  role: 'director' | 'manager' | 'supervisor' | 'employee';
   status: 'online' | 'away' | 'busy' | 'offline';
 }
 
@@ -13,23 +15,19 @@ export interface Message {
   id: string;
   senderId: string;
   senderName: string;
-  senderRole: 'director' | 'manager' | 'supervisor';
+  senderRole: 'director' | 'manager' | 'supervisor' | 'employee';
   content: string;
   originalContent?: string;
   timestamp: Date;
   priority: 'normal' | 'urgent';
-  isTranslated?: boolean;
-  isSummarized?: boolean;
-  fullContent?: string;
 }
 
-// ADICIONADO DE VOLTA: A interface Channel que estava faltando.
 export interface Channel {
   id: string;
   name: string;
   type: 'announcement' | 'group' | 'private';
   members: string[];
-  targetLevel: 'director' | 'manager' | 'supervisor' | 'user' | 'group'; 
+  targetLevel: 'director' | 'manager' | 'supervisor' | 'employee' | 'user' | 'group'; 
   canSendMessage?: boolean;
 }
 
@@ -38,12 +36,21 @@ export interface SystemStatus {
   message: string;
 }
 
-// CORRIGIDO: Removida a duplicata e mantida a versão completa com o 'status'.
 export interface HierarchyNode {
   id: string;
   name: string;
-  role: 'director' | 'manager' | 'supervisor';
-  children?: HierarchyNode[];
+  // MUDANÇA: Adicionado o campo de email que estava faltando.
+  email: string; 
+  role: 'director' | 'manager' | 'supervisor' | 'employee';
   isExpanded?: boolean;
   status?: 'online' | 'away' | 'busy' | 'offline';
+}
+
+export interface RecentChatItem {
+  id: string;
+  name: string;
+  lastMessage: string;
+  timestamp: string;
+  type: 'private' | 'group';
+  node?: HierarchyNode; 
 }
