@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-// CORREÇÃO: Padronizada a capitalização dos nomes dos componentes para PascalCase (ex: Sidebar)
+// src/App.tsx
+
+import { useState, useMemo, useEffect } from 'react'; // Adicionado useEffect
 import { LoginScreen } from './components/LoginScreen.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { ChatArea } from './components/ChatArea.tsx';
@@ -12,10 +13,30 @@ function App() {
   const [hierarchy, setHierarchy] = useState<HierarchyNode[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   
-  const [selectedNode, setSelectedNode] = useState<HierarchyNode | null>(null);
-  const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
+  const [openChats, setOpenChats] = useState<Channel[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
   const { systemStatus, showNotification, setShowNotification, sendMessage } = useWebSocket(setHierarchy, setMessages, !!currentUser);
+
+  // MUDANÇA: useEffect para inicializar o chat geral
+  useEffect(() => {
+    if (currentUser && openChats.length === 0) {
+      const generalChat: Channel = {
+        id: 'general-chat',
+        name: 'Geral',
+        type: 'group',
+        canSendMessage: true,
+        members: [], // Todos os membros participam por padrão
+        targetLevel: 'group',
+      };
+      setOpenChats([generalChat]);
+      setActiveChatId(generalChat.id);
+    }
+  }, [currentUser]); // Executa sempre que o usuário loga
+
+  const activeChannel = useMemo(() => {
+    return openChats.find(chat => chat.id === activeChatId) || null;
+  }, [openChats, activeChatId]);
 
   const handleLogin = (loggedInUser: User) => {
     setCurrentUser(loggedInUser);
@@ -23,38 +44,55 @@ function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
-    // A lógica no hook useWebSocket irá lidar com a desconexão
+    setOpenChats([]);
+    setActiveChatId(null);
   };
 
   const handleNodeSelect = (node: HierarchyNode) => {
-    if (!currentUser) return;
-    setSelectedNode(node);
-    
-    let targetChannel: Channel | null = null;
-    if (currentUser.role === 'director') {
-        targetChannel = { id: `avisos-${node.role}-${node.id}`, name: `Avisos para ${node.name}`, type: 'announcement', members: [], targetLevel: node.role, canSendMessage: true };
-    } else if (currentUser.role === 'manager') {
-        if(node.role === 'supervisor') {
-            targetChannel = { id: `avisos-sup-${node.id}`, name: `Avisos para Supervisores`, type: 'announcement', members: [], targetLevel: 'supervisor', canSendMessage: true };
-        }
+    if (!currentUser || node.id === currentUser.id) return;
+
+    const privateChatId = `private-${node.id}`;
+    const existingChat = openChats.find(chat => chat.id === privateChatId);
+
+    if (existingChat) {
+      setActiveChatId(existingChat.id);
     } else {
-       targetChannel = { id: 'view-only', name: `Avisos Recebidos`, type: 'announcement', members: [], targetLevel: 'supervisor', canSendMessage: false };
+      const newPrivateChat: Channel = {
+        id: privateChatId,
+        name: node.name,
+        type: 'private',
+        canSendMessage: true,
+        members: [currentUser.id, node.id],
+        targetLevel: 'user',
+      };
+      setOpenChats(prevChats => [...prevChats, newPrivateChat]);
+      setActiveChatId(newPrivateChat.id);
     }
-    setActiveChannel(targetChannel);
+  };
+  
+  const handleSelectChat = (chatId: string) => {
+    setActiveChatId(chatId);
+  };
+  
+  const handleCloseChat = (chatId: string) => {
+    const updatedChats = openChats.filter(chat => chat.id !== chatId);
+    setOpenChats(updatedChats);
+
+    if (activeChatId === chatId) {
+      setActiveChatId(updatedChats.length > 0 ? updatedChats[updatedChats.length - 1].id : null);
+    }
   };
 
   const handleSendMessage = (content: string, priority: 'normal' | 'urgent') => {
     if (!currentUser || !activeChannel?.canSendMessage) return;
+    const payload = { type: 'message' as const, senderId: currentUser.id, senderName: currentUser.name, senderRole: currentUser.role, channelId: activeChannel.id, content, priority };
+    sendMessage(payload);
+  };
 
-    const newMessage = {
-      type: 'message' as const,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderRole: currentUser.role,
-      content,
-      priority,
-    };
-    sendMessage(newMessage);
+  const handleStatusChange = (newStatus: 'online' | 'away' | 'busy' | 'offline') => {
+    if (currentUser) {
+      setCurrentUser({ ...currentUser, status: newStatus });
+    }
   };
 
   if (!currentUser) {
@@ -68,17 +106,19 @@ function App() {
         hierarchyNodes={hierarchy}
         systemStatus={systemStatus}
         onNodeSelect={handleNodeSelect}
-        selectedNodeId={selectedNode?.id}
         onLogout={handleLogout}
+        onStatusChange={handleStatusChange}
       />
-      
       <ChatArea
         activeChannel={activeChannel}
         messages={messages}
-        currentUserId={currentUser.id}
+        currentUser={currentUser}
         onSendMessage={handleSendMessage}
+        openChats={openChats}
+        activeChatId={activeChatId}
+        onSelectChat={handleSelectChat}
+        onCloseChat={handleCloseChat}
       />
-
       <SystemNotification
         message="Conexão restaurada. O sistema permanece operacional."
         show={showNotification}
