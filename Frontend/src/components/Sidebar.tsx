@@ -1,12 +1,10 @@
-// src/components/Sidebar.tsx
-
 import React, { useState } from 'react';
 import { User as UserIcon, Settings, LogOut, Check, Search, Users, UserPlus } from 'lucide-react';
-import { DirectoryList, DirectoryData } from './DirectoryList.tsx'; 
-import { StatusIndicator } from './StatusIndicator.tsx';
-import { RegisterUserModal } from './RegisterUserModal.tsx';
-import { RecentChats } from './RecentChats.tsx';
-import { User, SystemStatus, HierarchyNode, RecentChatItem } from '../types/index.ts';
+import { DirectoryList, DirectoryData } from './DirectoryList'; 
+import { StatusIndicator } from './StatusIndicator';
+import { RegisterUserModal } from './RegisterUserModal';
+import { RecentChats } from './RecentChats';
+import { User, SystemStatus, HierarchyNode, RecentChatItem } from '../types/index';
 
 interface SidebarProps {
   currentUser: User;
@@ -34,33 +32,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRegisterUser,
 }) => {
   const [showSettings, setShowSettings] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isRegisterModalOpen, setRegisterModalOpen] = useState(false);
 
   const statusOptions = [ 
-    { key: 'online', label: 'Online', color: 'bg-teal-500' }, 
-    { key: 'away', label: 'Ausente', color: 'bg-amber-500' }, 
-    { key: 'busy', label: 'Ocupado', color: 'bg-red-500' }, 
-    { key: 'offline', label: 'Invisível', color: 'bg-gray-500' }, 
-  ] as const;
-
-  const handleRegister = (userData: Omit<User, 'id' | 'avatar' | 'status'>) => {
-    onRegisterUser(userData);
-    setRegisterModalOpen(false); // Fecha o modal após o cadastro
-  };
+    { key: 'online' as const, label: 'Online', color: 'bg-teal-500' }, 
+    { key: 'away' as const, label: 'Ausente', color: 'bg-amber-500' }, 
+    { key: 'busy' as const, label: 'Ocupado', color: 'bg-red-500' }, 
+    { key: 'offline' as const, label: 'Invisível', color: 'bg-gray-500' }, 
+  ];
 
   return (
     <div className="w-80 bg-slate-900 border-r border-slate-700 flex flex-col">
-      {/* Perfil do Usuário */}
       <div className="p-4 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
             <UserIcon className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-white">{currentUser.name}</h3>
+            {/* <<< ADICIONADO O (VOCÊ) AQUI PARA NÃO QUEBRAR A LÓGICA >>> */}
+            <h3 className="font-semibold text-white">{currentUser.name} (Você)</h3>
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${currentUser.status === 'online' ? 'bg-teal-500' : currentUser.status === 'away' ? 'bg-amber-500' : currentUser.status === 'busy' ? 'bg-red-500' : 'bg-gray-500'}`} />
+              <div className={`w-2 h-2 rounded-full ${currentUser.status === 'online' ? 'bg-teal-500' : 'bg-gray-500'}`} />
               <span className="text-sm text-gray-400 capitalize">{currentUser.role}</span>
             </div>
           </div>
@@ -92,17 +84,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Área de Conteúdo Rolável */}
       <div className="flex-1 flex flex-col overflow-y-auto">
         <div className="p-4 space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="search" placeholder="Buscar pessoas ou canais..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"/>
+            <input type="search" placeholder="Buscar pessoas ou canais..." className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"/>
           </div>
           
           <div>
             <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">Conversas Recentes</h4>
-            <RecentChats chats={recentChats} onSelect={onSelectRecentChat} />
+            <RecentChats chats={[]} onSelect={() => {}} />
           </div>
 
           <div className="border-t border-slate-700 pt-4">
@@ -128,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <RegisterUserModal 
         isOpen={isRegisterModalOpen}
         onClose={() => setRegisterModalOpen(false)}
-        onRegister={handleRegister}
+        onRegister={(userData) => onRegisterUser(userData)}
         currentUserRole={currentUser.role}
       />
     </div>

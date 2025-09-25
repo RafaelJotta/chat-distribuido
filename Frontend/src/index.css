@@ -2,8 +2,4 @@
 @tailwind components;
 @tailwind utilities;
 
-/*
-  A linha abaixo importa suas animações customizadas DEPOIS 
-  das diretivas principais do Tailwind, resolvendo o erro.
-*/
 @import "./assets/css/custom-animations.css";

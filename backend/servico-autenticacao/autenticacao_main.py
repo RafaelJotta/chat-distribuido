@@ -8,7 +8,6 @@ class LoginRequest(BaseModel):
 
 app = FastAPI()
 
-# Permite requisições de qualquer origem, já que o Gateway protege o serviço
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,15 +18,32 @@ app.add_middleware(
 
 @app.post("/login")
 async def login(request: LoginRequest):
-    # Autenticação de demonstração
     if request.email == "adm@empresa.com" and request.password == "adm":
-        # --- CORREÇÃO APLICADA AQUI ---
-        # Agora, o login de administrador retorna o usuário Diretor, que tem permissões.
         return {
             "id": "dir-1",
-            "name": "Thiago Caproni (Você)",
-            "avatar": "",
+            "name": "Thiago Caproni",
             "role": "director",
+            "status": "online"
+        }
+    elif request.email == "alessandro@empresa.com" and request.password == "123":
+        return {
+            "id": "mgr-1",
+            "name": "Alessandro Augusto",
+            "role": "manager",
+            "status": "online"
+        }
+    elif request.email == "amando@empresa.com" and request.password == "123":
+        return {
+            "id": "sup-1",
+            "name": "Amando Luiz",
+            "role": "supervisor",
+            "status": "online"
+        }
+    elif request.email == "rafael@empresa.com" and request.password == "123":
+        return {
+            "id": "mgr-2",
+            "name": "Rafael Jotta",
+            "role": "manager",
             "status": "online"
         }
     else:

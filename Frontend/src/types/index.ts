@@ -1,11 +1,9 @@
-// src/types/index.ts
-
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email?: string;
   password?: string;
-  avatar: string;
+  avatar?: string;
   role: 'director' | 'manager' | 'supervisor' | 'employee';
   status: 'online' | 'away' | 'busy' | 'offline';
 }
@@ -15,19 +13,19 @@ export interface Message {
   id: string;
   senderId: string;
   senderName: string;
-  senderRole: 'director' | 'manager' | 'supervisor' | 'employee';
+  senderRole: User['role'];
   content: string;
-  originalContent?: string;
   timestamp: Date;
   priority: 'normal' | 'urgent';
+  channelId: string;
 }
 
 export interface Channel {
   id: string;
   name: string;
-  type: 'announcement' | 'group' | 'private';
+  type: 'group' | 'private';
   members: string[];
-  targetLevel: 'director' | 'manager' | 'supervisor' | 'employee' | 'user' | 'group'; 
+  targetLevel?: 'director' | 'manager' | 'supervisor' | 'employee' | 'user'; 
   canSendMessage?: boolean;
 }
 
@@ -39,11 +37,10 @@ export interface SystemStatus {
 export interface HierarchyNode {
   id: string;
   name: string;
-  // MUDANÇA: Adicionado o campo de email que estava faltando.
-  email: string; 
-  role: 'director' | 'manager' | 'supervisor' | 'employee';
-  isExpanded?: boolean;
-  status?: 'online' | 'away' | 'busy' | 'offline';
+  email?: string; 
+  role: User['role'];
+  status?: User['status'];
+  children?: HierarchyNode[];
 }
 
 export interface RecentChatItem {
