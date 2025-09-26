@@ -77,4 +77,5 @@ Em ambos os modos, a aplicação estará disponível no seu navegador em:<br>
 - Vá para o terminal onde os contêineres estão rodando.
 - Pressione `Ctrl + C`.
 
-<img width="3408" height="3840" alt="DiagramaEntrega2" src="https://github.com/user-attachments/assets/acf36101-5423-4768-9b59-82e0ae00f8f9" />
+<img width="3374" height="3840" alt="DiagramaEntrega2" src="https://github.com/user-attachments/assets/fc646b1c-5098-4d3c-b3ba-68c1506e446c" />
+
