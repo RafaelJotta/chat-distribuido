@@ -39,5 +39,7 @@ services:
     build:
       context: ./frontend
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-frontend:latest
+    ports:
+      - "8080:80" 
     expose:
       - "80"
