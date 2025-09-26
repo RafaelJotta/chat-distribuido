@@ -64,7 +64,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
             <div ref={messagesEndRef} />
           </div>
 
-          {/* <<< A BARRA DE ABAS ESTÁ DE VOLTA AQUI! >>> */}
+          {/* <<< A BARRA DE ABAS ESTÁ DE VOLTA AQUI >>> */}
           <ChatTabs 
             openChats={openChats}
             activeChatId={activeChatId}
