@@ -1,0 +1,19 @@
+# Usa a imagem oficial do Node.js, que tem NPM.
+FROM node:18-alpine
+
+# Define o diretório de trabalho dentro do container
+WORKDIR /app
+
+# Copia primeiro o package.json e instala as dependências.
+# Isso aproveita o cache do Docker se as dependências не mudarem.
+COPY package.json ./
+RUN npm install
+
+# Copia o resto do código do projeto
+COPY . .
+
+# Expõe a porta do servidor de desenvolvimento do Vite
+EXPOSE 5173
+
+# Comando padrão para iniciar o servidor de desenvolvimento
+CMD ["npm", "run", "dev", "--", "--host"]

@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 18080
-CMD ["uvicorn", "autenticacao_main:app", "--host", "0.0.0.0", "--port", "18080"]
+CMD ["uvicorn", "autenticacao_main:app", "--host", "0.0.0.0", "--port", "18080", "--reload"]
