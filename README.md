@@ -79,3 +79,6 @@ Em ambos os modos, a aplicação estará disponível no seu navegador em:<br>
 
 <img width="3374" height="3840" alt="DiagramaEntrega2" src="https://github.com/user-attachments/assets/fc646b1c-5098-4d3c-b3ba-68c1506e446c" />
 
+<img width="716" height="743" alt="DiagramaEntrega2ICONES" src="https://github.com/user-attachments/assets/9c86b121-bfba-4cd4-ac8e-1f3b5e719966" />
+
+
