@@ -2,7 +2,6 @@ services:
   # API Gateway é o ponto de entrada único
   api-gateway:
     build: ./api-gateway
-    image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-api-gateway:latest
     ports:
       - "8080:80"
     depends_on:
@@ -14,7 +13,6 @@ services:
   servico-autenticacao:
     build:
       context: ./backend/servico-autenticacao
-    image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-servico-autenticacao:latest
     expose:
       - "18080"
     healthcheck:
@@ -27,7 +25,6 @@ services:
   servico-mensagens:
     build:
       context: ./backend/servico-mensagens
-    image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-servico-mensagens:latest
     expose:
       - "18081"
     depends_on:
@@ -38,6 +35,5 @@ services:
   frontend:
     build:
       context: ./frontend
-    image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-frontend:latest
     expose:
       - "80"
