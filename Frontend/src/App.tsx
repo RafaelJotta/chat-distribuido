@@ -1,11 +1,17 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { SystemNotification } from './components/SystemNotification';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Message, Channel, HierarchyNode, User, RecentChatItem } from './types/index';
+import { Message, Channel, HierarchyNode, User } from './types/index';
 import { DirectoryData } from './components/DirectoryList';
+
+// Função helper para criar um ID de canal privado consistente
+const createPrivateChannelId = (userId1: string, userId2: string) => {
+  const sortedIds = [userId1, userId2].sort();
+  return `private-${sortedIds[0]}-${sortedIds[1]}`;
+};
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -15,13 +21,31 @@ function App() {
   const [directoryData, setDirectoryData] = useState<DirectoryData>({
     director: undefined, managers: [], supervisors: [], employees: [],
   });
+  
+  // ✅ CORREÇÃO: showNotification agora é um estado local do App.tsx
+  const [showNotification, setShowNotification] = useState(false);
 
-  const { systemStatus, showNotification, setShowNotification, sendMessage } = useWebSocket({
+  const openPrivateChat = useCallback((nodeId: string, nodeName: string) => {
+    if (!currentUser || nodeId === currentUser.id) return;
+    const privateChatId = createPrivateChannelId(currentUser.id, nodeId);
+    if (!openChats.some(chat => chat.id === privateChatId)) {
+      const newPrivateChat: Channel = {
+        id: privateChatId,
+        name: nodeName,
+        type: 'private',
+        canSendMessage: true,
+        members: [currentUser.id, nodeId]
+      };
+      setOpenChats(prev => [...prev, newPrivateChat]);
+    }
+    setActiveChatId(privateChatId);
+  }, [currentUser, openChats]); 
+  
+  const { systemStatus, sendMessage } = useWebSocket({
     currentUser,
     setDirectoryData,
     setMessages,
-    openChats,
-    setOpenChats,
+    openPrivateChat,
   });
 
   useEffect(() => {
@@ -41,19 +65,6 @@ function App() {
     setCurrentUser(null);
     setOpenChats([]);
     setActiveChatId(null);
-  };
-  
-  // <<< ESTA É A FUNÇÃO CORRIGIDA PARA ABRIR O CHAT DO DIRETÓRIO >>>
-  const handleNodeSelect = (node: HierarchyNode) => {
-    if (!currentUser || node.id === currentUser.id) return;
-    const privateChatId = `private-${node.id}`;
-    if (!openChats.some(chat => chat.id === privateChatId)) {
-      const newPrivateChat: Channel = {
-        id: privateChatId, name: node.name, type: 'private', canSendMessage: true, members: [currentUser.id, node.id]
-      };
-      setOpenChats(prev => [...prev, newPrivateChat]);
-    }
-    setActiveChatId(privateChatId);
   };
   
   const handleSelectChat = (chatId: string) => setActiveChatId(chatId);
@@ -79,12 +90,12 @@ function App() {
   const handleOpenGroupChat = (channelType: 'managers' | 'supervisors' | 'employees') => {
     const channelId = `group-${channelType}`;
     if (!openChats.some(chat => chat.id === channelId)) {
-        const channelNames = { managers: 'Canal dos Gerentes', supervisors: 'Canal dos Supervisores', employees: 'Canal dos Funcionários' };
-        const newGroupChat: Channel = {
-            id: channelId, name: channelNames[channelType], type: 'group', canSendMessage: true, members: [],
-            targetLevel: channelType.slice(0, -1) as any,
-        };
-        setOpenChats(prev => [...prev, newGroupChat]);
+      const channelNames = { managers: 'Canal dos Gerentes', supervisors: 'Canal dos Supervisores', employees: 'Canal dos Funcionários' };
+      const newGroupChat: Channel = {
+        id: channelId, name: channelNames[channelType], type: 'group', canSendMessage: true, members: [],
+        targetLevel: channelType.slice(0, -1) as any,
+      };
+      setOpenChats(prev => [...prev, newGroupChat]);
     }
     setActiveChatId(channelId);
   };
@@ -95,11 +106,22 @@ function App() {
 
   return (
     <div className="h-screen bg-slate-900 text-white flex">
-      {/* <<< A PROP onNodeSelect ESTÁ SENDO PASSADA CORRETAMENTE AGORA >>> */}
-      <Sidebar currentUser={currentUser} directoryData={directoryData} recentChats={[]} systemStatus={systemStatus} onNodeSelect={handleNodeSelect} onOpenGroupChat={handleOpenGroupChat} onSelectRecentChat={() => {}} onLogout={handleLogout} onStatusChange={handleStatusChange} onRegisterUser={() => {}} />
+      <Sidebar
+        currentUser={currentUser}
+        directoryData={directoryData}
+        recentChats={[]}
+        systemStatus={systemStatus}
+        onNodeSelect={(node) => openPrivateChat(node.id, node.name)}
+        onOpenGroupChat={handleOpenGroupChat}
+        onSelectRecentChat={() => {}}
+        onLogout={handleLogout}
+        onStatusChange={handleStatusChange}
+        onRegisterUser={() => {}}
+      />
       <ChatArea activeChannel={activeChannel} messages={messages} currentUser={currentUser} onSendMessage={handleSendMessage} openChats={openChats} activeChatId={activeChatId} onSelectChat={handleSelectChat} onCloseChat={handleCloseChat} />
       <SystemNotification message="Conexão restaurada." show={showNotification} onClose={() => setShowNotification(false)} />
     </div>
   );
 }
+
 export default App;

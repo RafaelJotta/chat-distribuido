@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Serviço de Frontend com Hot Reload
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile.dev # ✅ CORREÇÃO: Aponta para o novo Dockerfile de desenvolvimento
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./Frontend:/app
+      - /app/node_modules
+    # O comando agora não é mais necessário aqui, pois já está no Dockerfile.dev, mas podemos deixar para clareza.
+    command: npm run dev -- --host
+
+  # API Gateway (Nginx)
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:80"
+    depends_on:
+      - frontend
+      - servico-autenticacao
+      - servico-mensagens
+
+  # Serviço de Autenticação com Reload
+  servico-autenticacao:
+    build: ./backend/servico-autenticacao
+    volumes:
+      - ./backend/servico-autenticacao:/app
+
+  # Serviço de Mensagens com Reload
+  servico-mensagens:
+    build: ./backend/servico-mensagens
+    volumes:
+      - ./backend/servico-mensagens:/app

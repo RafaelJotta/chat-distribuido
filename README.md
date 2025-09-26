@@ -44,3 +44,41 @@ Este projeto combina um frontend moderno e profissional, desenvolvido com **Reac
 1.  Vá para o terminal onde os contêineres estão rodando.
 2.  Pressione `Ctrl + C`.
 3.  (Opcional) Para remover os contêineres e a rede, rode: `docker-compose down`.
+
+## ⚙️ Como Executar o Projeto
+
+Existem dois modos para executar este projeto: **Desenvolvimento** (recomendado para codificar) e **Produção** (para simular o ambiente final).
+
+### 🚀 Modo de Desenvolvimento (Recomendado)
+
+Use este modo para o dia a dia de trabalho. Ele ativa o *Hot Reload*, que atualiza a aplicação automaticamente no navegador sempre que você salva uma alteração nos arquivos, tornando o desenvolvimento muito mais rápido.
+
+Para iniciar, execute o comando:
+
+```bash
+docker-compose -f docker-compose.dev.yml up --build
+```
+
+### 📦 Modo de Produção
+
+Use este modo para testar a versão final e otimizada do projeto, como se ele estivesse implantado na nuvem. Neste modo, as alterações no código não são refletidas automaticamente.
+
+Para iniciar, execute o comando:
+
+```bash
+docker-compose up --build
+```
+
+Em ambos os modos, a aplicação estará disponível no seu navegador em:<br>
+👉 **http://localhost:8080**
+
+### Para parar a aplicação
+
+- Vá para o terminal onde os contêineres estão rodando.
+- Pressione `Ctrl + C`.
+
+<img width="3374" height="3840" alt="DiagramaEntrega2" src="https://github.com/user-attachments/assets/fc646b1c-5098-4d3c-b3ba-68c1506e446c" />
+
+<img width="716" height="743" alt="DiagramaEntrega2ICONES" src="https://github.com/user-attachments/assets/9c86b121-bfba-4cd4-ac8e-1f3b5e719966" />
+
+
