@@ -1,17 +1,14 @@
-version: '3.8'
-
 services:
   # Serviço de Frontend com Hot Reload
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev # ✅ CORREÇÃO: Aponta para o novo Dockerfile de desenvolvimento
+      dockerfile: Dockerfile.dev
     ports:
       - "5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    # O comando agora não é mais necessário aqui, pois já está no Dockerfile.dev, mas podemos deixar para clareza.
     command: npm run dev -- --host
 
   # API Gateway (Nginx)
@@ -29,9 +26,30 @@ services:
     build: ./backend/servico-autenticacao
     volumes:
       - ./backend/servico-autenticacao:/app
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017
+    depends_on:
+      - mongo
 
   # Serviço de Mensagens com Reload
   servico-mensagens:
     build: ./backend/servico-mensagens
     volumes:
       - ./backend/servico-mensagens:/app
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  # Novo: Serviço do Banco de Dados MongoDB
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - "27017:27017" # Mapeamos a porta para podermos inspecionar o DB localmente
+    volumes:
+      - mongo-data:/data/db
+
+# Novo: Define o volume para persistência dos dados do MongoDB
+volumes:
+  mongo-data:

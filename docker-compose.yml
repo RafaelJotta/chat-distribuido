@@ -1,3 +1,4 @@
+# docker-compose.yml (Versão final para AWS)
 services:
   # API Gateway é o ponto de entrada único
   api-gateway:
@@ -22,6 +23,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017
+    depends_on:
+      - mongo
 
   # Serviço de Mensagens em Python com WebSocket
   servico-mensagens:
@@ -30,7 +35,11 @@ services:
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-servico-mensagens:latest
     expose:
       - "18081"
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017
     depends_on:
+      mongo:
+        condition: service_started
       servico-autenticacao:
         condition: service_healthy
 
@@ -38,6 +47,19 @@ services:
   frontend:
     build:
       context: ./frontend
-    image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-frontend:latest 
+    image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-frontend:latest
     expose:
       - "80"
+
+  # Novo: Serviço do Banco de Dados MongoDB
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    # Não precisamos expor a porta do banco para o mundo exterior na AWS,
+    # apenas para os outros containers, o que o Docker já faz.
+    volumes:
+      - mongo-data:/data/db
+
+# Novo: Define o volume para persistir os dados do banco na máquina da AWS
+volumes:
+  mongo-data:
