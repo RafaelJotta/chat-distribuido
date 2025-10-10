@@ -4,12 +4,12 @@ services:
   # Serviço de Frontend com Hot Reload
   frontend:
     build:
-      context: ./Frontend
+      context: ./frontend
       dockerfile: Dockerfile.dev # ✅ CORREÇÃO: Aponta para o novo Dockerfile de desenvolvimento
     ports:
       - "5173:5173"
     volumes:
-      - ./Frontend:/app
+      - ./frontend:/app
       - /app/node_modules
     # O comando agora não é mais necessário aqui, pois já está no Dockerfile.dev, mas podemos deixar para clareza.
     command: npm run dev -- --host
