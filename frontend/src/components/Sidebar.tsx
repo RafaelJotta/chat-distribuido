@@ -1,8 +1,11 @@
+// frontend/src/components/Sidebar.tsx
+
 import React, { useState } from 'react';
 import { User as UserIcon, Settings, LogOut, Check, Search, Users, UserPlus } from 'lucide-react';
-import { DirectoryList, DirectoryData } from './DirectoryList'; 
+import { DirectoryList, DirectoryData } from './DirectoryList';
 import { StatusIndicator } from './StatusIndicator';
-import { RegisterUserModal } from './RegisterUserModal';
+// ✅ REMOVIDO: Não precisamos mais importar o RegisterUserModal aqui
+// import { RegisterUserModal } from './RegisterUserModal';
 import { RecentChats } from './RecentChats';
 import { User, SystemStatus, HierarchyNode, RecentChatItem } from '../types/index';
 
@@ -16,7 +19,8 @@ interface SidebarProps {
   onSelectRecentChat: (chat: RecentChatItem) => void;
   onLogout: () => void;
   onStatusChange: (status: 'online' | 'away' | 'busy' | 'offline') => void;
-  onRegisterUser: (userData: Omit<User, 'id' | 'avatar' | 'status'>) => void;
+  // ✅ CORREÇÃO: onRegisterUser agora é apenas uma função que abre o modal, sem argumentos.
+  onRegisterUser: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -29,27 +33,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectRecentChat,
   onLogout,
   onStatusChange,
-  onRegisterUser,
+  onRegisterUser, // A função para abrir o modal agora é recebida aqui
 }) => {
   const [showSettings, setShowSettings] = useState(false);
-  const [isRegisterModalOpen, setRegisterModalOpen] = useState(false);
+  // ✅ REMOVIDO: O estado do modal não pertence mais à Sidebar
+  // const [isRegisterModalOpen, setRegisterModalOpen] = useState(false);
 
-  const statusOptions = [ 
-    { key: 'online' as const, label: 'Online', color: 'bg-teal-500' }, 
-    { key: 'away' as const, label: 'Ausente', color: 'bg-amber-500' }, 
-    { key: 'busy' as const, label: 'Ocupado', color: 'bg-red-500' }, 
-    { key: 'offline' as const, label: 'Invisível', color: 'bg-gray-500' }, 
+  const statusOptions = [
+    { key: 'online' as const, label: 'Online', color: 'bg-teal-500' },
+    { key: 'away' as const, label: 'Ausente', color: 'bg-amber-500' },
+    { key: 'busy' as const, label: 'Ocupado', color: 'bg-red-500' },
+    { key: 'offline' as const, label: 'Invisível', color: 'bg-gray-500' },
   ];
 
   return (
     <div className="w-80 bg-slate-900 border-r border-slate-700 flex flex-col">
+      {/* ... (código do cabeçalho do usuário, que permanece o mesmo) ... */}
       <div className="p-4 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-teal-600 rounded-full flex items-center justify-center">
             <UserIcon className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            {/* <<< ADICIONADO O (VOCÊ) AQUI PARA NÃO QUEBRAR A LÓGICA >>> */}
             <h3 className="font-semibold text-white">{currentUser.name} (Você)</h3>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${currentUser.status === 'online' ? 'bg-teal-500' : 'bg-gray-500'}`} />
@@ -67,7 +72,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <hr className="my-1 border-slate-600" />
                 {(currentUser.role === 'director' || currentUser.role === 'manager') && (
                   <div className="py-1">
-                    <button onClick={() => { setRegisterModalOpen(true); setShowSettings(false); }} className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-300 hover:bg-slate-700">
+                    {/* ✅ CORREÇÃO: O botão agora chama a prop onRegisterUser diretamente */}
+                    <button onClick={() => { onRegisterUser(); setShowSettings(false); }} className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-300 hover:bg-slate-700">
                       <UserPlus className="w-4 h-4" /> Cadastrar Usuário
                     </button>
                   </div>
@@ -83,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
       </div>
-
+      {/* ... (resto do código da Sidebar, que permanece o mesmo) ... */}
       <div className="flex-1 flex flex-col overflow-y-auto">
         <div className="p-4 space-y-4">
           <div className="relative">
@@ -116,12 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <StatusIndicator status={systemStatus} />
       </div>
       
-      <RegisterUserModal 
-        isOpen={isRegisterModalOpen}
-        onClose={() => setRegisterModalOpen(false)}
-        onRegister={(userData) => onRegisterUser(userData)}
-        currentUserRole={currentUser.role}
-      />
+      {/* ✅ REMOVIDO: O modal não é mais renderizado aqui */}
     </div>
   );
 };

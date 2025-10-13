@@ -1,11 +1,15 @@
+// frontend/src/App.tsx
+
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { SystemNotification } from './components/SystemNotification';
 import { useWebSocket } from './hooks/useWebSocket';
-import { Message, Channel, HierarchyNode, User } from './types/index';
+import { Message, Channel, User } from './types/index';
 import { DirectoryData } from './components/DirectoryList';
+// ✅ NOVO: Importa o componente do modal
+import { RegisterUserModal } from './components/RegisterUserModal'; 
 
 // Função helper para criar um ID de canal privado consistente
 const createPrivateChannelId = (userId1: string, userId2: string) => {
@@ -22,8 +26,9 @@ function App() {
     director: undefined, managers: [], supervisors: [], employees: [],
   });
   
-  // ✅ CORREÇÃO: showNotification agora é um estado local do App.tsx
   const [showNotification, setShowNotification] = useState(false);
+  // ✅ NOVO: Estado para controlar a visibilidade do modal de registro
+  const [isRegisterModalOpen, setRegisterModalOpen] = useState(false);
 
   const openPrivateChat = useCallback((nodeId: string, nodeName: string) => {
     if (!currentUser || nodeId === currentUser.id) return;
@@ -47,6 +52,43 @@ function App() {
     setMessages,
     openPrivateChat,
   });
+
+  // ✅ NOVO: Função para lidar com o registro de um novo usuário
+  const handleRegisterUser = async (newUserData: Omit<User, 'id' | 'status'>) => {
+    if (!currentUser) return;
+
+    // Adiciona o ID do usuário atual como o 'manager_id' do novo usuário
+    const fullUserData = {
+      ...newUserData,
+      manager_id: currentUser.id,
+    };
+
+    try {
+      const response = await fetch('http://localhost:8080/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(fullUserData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Falha ao cadastrar usuário.');
+      }
+
+      alert('Usuário cadastrado com sucesso! A lista será atualizada em breve.');
+      setRegisterModalOpen(false); // Fecha o modal
+      // Em uma aplicação mais robusta, você poderia forçar a atualização da hierarquia aqui.
+      
+    } catch (error) {
+      if (error instanceof Error) {
+        alert(`Erro: ${error.message}`);
+      } else {
+        alert('Ocorreu um erro desconhecido.');
+      }
+    }
+  };
 
   useEffect(() => {
     if (currentUser && !openChats.some(c => c.id === 'general-chat')) {
@@ -116,9 +158,19 @@ function App() {
         onSelectRecentChat={() => {}}
         onLogout={handleLogout}
         onStatusChange={handleStatusChange}
-        onRegisterUser={() => {}}
+        // ✅ NOVO: Passa a função para abrir o modal
+        onRegisterUser={() => setRegisterModalOpen(true)}
       />
       <ChatArea activeChannel={activeChannel} messages={messages} currentUser={currentUser} onSendMessage={handleSendMessage} openChats={openChats} activeChatId={activeChatId} onSelectChat={handleSelectChat} onCloseChat={handleCloseChat} />
+      
+      {/* ✅ NOVO: Renderiza o modal condicionalmente */}
+      <RegisterUserModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setRegisterModalOpen(false)}
+        onRegister={handleRegisterUser}
+        currentUserRole={currentUser.role}
+      />
+
       <SystemNotification message="Conexão restaurada." show={showNotification} onClose={() => setShowNotification(false)} />
     </div>
   );
