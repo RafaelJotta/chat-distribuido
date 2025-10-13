@@ -1,8 +1,22 @@
+// frontend/src/hooks/useWebSocket.ts
+
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Message, SystemStatus, User, HierarchyNode } from '../types';
 import { DirectoryData } from '../components/DirectoryList';
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
+
+const processInitialMessages = (messages: Message[]): Record<string, Message[]> => {
+  const messagesByChannel: Record<string, Message[]> = {};
+  for (const message of messages) {
+    const formattedMessage = { ...message, timestamp: new Date(message.timestamp) };
+    if (!messagesByChannel[message.channelId]) {
+      messagesByChannel[message.channelId] = [];
+    }
+    messagesByChannel[message.channelId].push(formattedMessage);
+  }
+  return messagesByChannel;
+};
 
 const processHierarchyToDirectoryData = (nodes: HierarchyNode[]): DirectoryData => {
   const directory: DirectoryData = { director: undefined, managers: [], supervisors: [], employees: [] };
@@ -47,38 +61,27 @@ export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openP
     };
 
     ws.current.onmessage = (event) => {
+      // ✅ LOG DE DEPURAÇÃO: Mostra tudo que chega do servidor
+      console.log('[WebSocket-IN]:', event.data);
+      
       try {
         const data = JSON.parse(event.data);
 
         if (data.type === 'initialState') {
-          const { hierarchy } = data.payload;
-          // ✅ CORREÇÃO: Popula apenas o diretório, sem mais apagar as mensagens.
+          const { hierarchy, messages } = data.payload;
           setDirectoryData(processHierarchyToDirectoryData(hierarchy));
+          setMessages(processInitialMessages(messages));
         
         } else if (data.type === 'status_update') {
           const { userId, status } = data.payload;
-          setDirectoryData(prev => {
-            // Recria a árvore completa a partir das listas planas do estado anterior
-            const currentHierarchy: HierarchyNode[] = [];
-            if (prev.director) {
-                // Simula a estrutura hierárquica completa para a atualização
-                const directorNode = {...prev.director};
-                directorNode.children = [...prev.managers]; 
-                // Essa é uma simplificação, a lógica real precisaria reconstruir a árvore aninhada
-                // Para este projeto, vamos atualizar de forma mais direta:
-                currentHierarchy.push(directorNode);
-            }
+          const updateStatus = (user: HierarchyNode) => user.id === userId ? { ...user, status } : user;
             
-            // Lógica mais simples e direta para atualizar o status
-            const updateStatus = (user: HierarchyNode) => user.id === userId ? { ...user, status } : user;
-            
-            return {
-                director: prev.director ? updateStatus(prev.director) : undefined,
-                managers: prev.managers.map(updateStatus),
-                supervisors: prev.supervisors.map(updateStatus),
-                employees: prev.employees.map(updateStatus)
-            };
-          });
+          setDirectoryData(prev => ({
+              director: prev.director ? updateStatus(prev.director) : undefined,
+              managers: prev.managers.map(updateStatus),
+              supervisors: prev.supervisors.map(updateStatus),
+              employees: prev.employees.map(updateStatus)
+          }));
 
         } else if (data.type === 'message') {
           const message: Message = { ...data, timestamp: new Date(data.timestamp) };
@@ -122,6 +125,8 @@ export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openP
 
   const sendMessage = useCallback((message: any) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
+      // ✅ LOG DE DEPURAÇÃO: Mostra tudo que está sendo enviado para o servidor
+      console.log('[WebSocket-OUT]:', JSON.stringify(message));
       ws.current.send(JSON.stringify(message));
     }
   }, []);

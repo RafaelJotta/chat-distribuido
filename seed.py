@@ -9,7 +9,7 @@ users_to_create = [
     {"email": "adm@empresa.com", "password": "adm", "name": "Thiago Caproni", "role": "director", "manager_id": None},
     {"email": "alessandro@empresa.com", "password": "123", "name": "Alessandro Augusto", "role": "manager", "manager_id": "dir-1"},
     {"email": "rafael@empresa.com", "password": "123", "name": "Rafael Jotta", "role": "manager", "manager_id": "dir-1"},
-    {"email": "amando@empresa.com", "password": "123", "name": "Amando Luiz", "role": "supervisor", "manager_id": "mgr-1"},
+    {"email": "amando@empresa.com", "password": "123", "name": "Amando Luiz", "role": "manager", "manager_id": "dir-1"},
 ]
 
 def seed_database():

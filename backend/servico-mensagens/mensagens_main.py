@@ -1,3 +1,5 @@
+# backend/servico-mensagens/mensagens_main.py
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 import json
@@ -6,7 +8,6 @@ from typing import Dict, List, Set
 import motor.motor_asyncio
 import os
 
-# --- Configuração do Banco de Dados ---
 DATABASE_URL = os.getenv("DATABASE_URL", "mongodb://localhost:27017")
 client = motor.motor_asyncio.AsyncIOMotorClient(DATABASE_URL)
 db = client.chat_distribuido
@@ -55,10 +56,14 @@ async def websocket_endpoint(websocket: WebSocket):
             hierarchy_data = await fetch_hierarchy_from_db()
             update_statuses_in_hierarchy(hierarchy_data, list(active_connections.keys()))
             
-            # Busca as últimas 50 mensagens para popular o chat
             messages_cursor = db.messages.find({}, {"_id": 0}).sort("timestamp", -1).limit(50)
             messages_data = await messages_cursor.to_list(length=50)
             messages_data.reverse()
+            
+            # Converte ObjectIds para string no histórico inicial, se houver
+            for msg in messages_data:
+                if '_id' in msg:
+                    msg['_id'] = str(msg['_id'])
 
             initial_state = {"hierarchy": hierarchy_data, "messages": messages_data}
             await websocket.send_text(json.dumps({"type": "initialState", "payload": initial_state}))
@@ -75,6 +80,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 message_data["timestamp"] = datetime.now().isoformat()
                 
                 await db.messages.insert_one(message_data)
+                
+                # ✅ *** A CORREÇÃO ESTÁ AQUI *** ✅
+                # Remove o campo _id (do tipo ObjectId) que o MongoDB adicionou,
+                # pois ele não pode ser convertido para JSON diretamente.
+                message_data.pop("_id", None)
                 
                 channel_id = message_data.get("channelId", "")
                 sender_id = message_data.get("senderId")
@@ -96,8 +106,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         
                 for target_id in targets:
                     if target_id in active_connections:
-                        try: await active_connections[target_id].send_text(json.dumps(message_data))
-                        except Exception: pass
+                        try:
+                            await active_connections[target_id].send_text(json.dumps(message_data))
+                        except Exception as e:
+                            print(f"ERRO ao enviar para {target_id}: {e}")
 
     except WebSocketDisconnect:
         if user_id and user_id in active_connections:
