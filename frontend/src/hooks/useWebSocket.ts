@@ -6,6 +6,7 @@ import { DirectoryData } from '../components/DirectoryList';
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
+// ... (funções processInitialMessages e processHierarchyToDirectoryData não mudam) ...
 const processInitialMessages = (messages: Message[]): Record<string, Message[]> => {
   const messagesByChannel: Record<string, Message[]> = {};
   for (const message of messages) {
@@ -17,7 +18,6 @@ const processInitialMessages = (messages: Message[]): Record<string, Message[]> 
   }
   return messagesByChannel;
 };
-
 const processHierarchyToDirectoryData = (nodes: HierarchyNode[]): DirectoryData => {
   const directory: DirectoryData = { director: undefined, managers: [], supervisors: [], employees: [] };
   const traverse = (nodeList: HierarchyNode[] = []) => {
@@ -32,18 +32,35 @@ const processHierarchyToDirectoryData = (nodes: HierarchyNode[]): DirectoryData 
   traverse(nodes);
   return directory;
 };
+// ... (fim das funções que não mudam) ...
+
 
 interface UseWebSocketProps {
   currentUser: User | null;
   setDirectoryData: SetState<DirectoryData>;
   setMessages: SetState<Record<string, Message[]>>;
-  openPrivateChat: (nodeId: string, nodeName: string) => void;
+  // ✅ *** NOVO PASSO 3.A *** ✅
+  ensureChatTabExists: (channelId: string, name: string, type?: 'private' | 'group') => void;
+  activeChatId: string | null;
+  setUnreadCounts: SetState<Record<string, number>>;
 }
 
-export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openPrivateChat }: UseWebSocketProps) => {
+export const useWebSocket = ({
+  currentUser,
+  setDirectoryData,
+  setMessages,
+  ensureChatTabExists,
+  activeChatId,
+  setUnreadCounts
+}: UseWebSocketProps) => {
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({ status: 'reconnecting', message: 'Conectando...' });
   const ws = useRef<WebSocket | null>(null);
   const retryTimeoutRef = useRef<number | null>(null);
+  const activeChatIdRef = useRef(activeChatId);
+  
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
 
   const connect = useCallback(() => {
     if (!currentUser || (ws.current && ws.current.readyState === WebSocket.OPEN)) return;
@@ -56,26 +73,31 @@ export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openP
       console.log('Conectado ao WebSocket');
       setSystemStatus({ status: 'connected', message: 'Conectado' });
       if (ws.current && currentUser) {
-        ws.current.send(JSON.stringify({ type: 'user_connect', userId: currentUser.id }));
+        ws.current.send(JSON.stringify({ 
+          type: 'user_connect', 
+          userId: currentUser.id,
+          role: currentUser.role
+        }));
       }
     };
 
     ws.current.onmessage = (event) => {
-      // ✅ LOG DE DEPURAÇÃO: Mostra tudo que chega do servidor
       console.log('[WebSocket-IN]:', event.data);
       
       try {
         const data = JSON.parse(event.data);
 
         if (data.type === 'initialState') {
-          const { hierarchy, messages } = data.payload;
+          const { hierarchy, messages, unreadCounts } = data.payload; // <--- Pega as contagens
           setDirectoryData(processHierarchyToDirectoryData(hierarchy));
           setMessages(processInitialMessages(messages));
+          // ✅ *** NOVO PASSO 3.B *** ✅
+          // Seta o estado de não lidos com os dados persistidos
+          setUnreadCounts(unreadCounts || {}); 
         
         } else if (data.type === 'status_update') {
           const { userId, status } = data.payload;
           const updateStatus = (user: HierarchyNode) => user.id === userId ? { ...user, status } : user;
-            
           setDirectoryData(prev => ({
               director: prev.director ? updateStatus(prev.director) : undefined,
               managers: prev.managers.map(updateStatus),
@@ -93,8 +115,16 @@ export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openP
             return { ...prev, [channelId]: newChannelMessages };
           });
           
+          if (channelId !== activeChatIdRef.current && senderId !== currentUser?.id) {
+            console.log(`INCREMENTANDO CONTAGEM PARA: ${channelId}`);
+            setUnreadCounts(prevCounts => ({
+              ...prevCounts,
+              [channelId]: (prevCounts[channelId] || 0) + 1
+            }));
+          }
+          
           if (channelId.startsWith("private-") && senderId !== currentUser?.id) {
-            openPrivateChat(senderId, senderName);
+            ensureChatTabExists(channelId, senderName, 'private');
           }
         }
       } catch (error) { console.error("ERRO AO PROCESSAR MENSAGEM:", error, "DADOS:", event.data); }
@@ -108,7 +138,7 @@ export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openP
       if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = window.setTimeout(connect, 5000);
     };
-  }, [currentUser, setDirectoryData, setMessages, openPrivateChat]);
+  }, [currentUser, setDirectoryData, setMessages, ensureChatTabExists, setUnreadCounts]);
 
   useEffect(() => {
     if (currentUser) {
@@ -125,11 +155,21 @@ export const useWebSocket = ({ currentUser, setDirectoryData, setMessages, openP
 
   const sendMessage = useCallback((message: any) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
-      // ✅ LOG DE DEPURAÇÃO: Mostra tudo que está sendo enviado para o servidor
       console.log('[WebSocket-OUT]:', JSON.stringify(message));
       ws.current.send(JSON.stringify(message));
     }
   }, []);
+  
+  // ✅ *** NOVO PASSO 3.C *** ✅
+  // Nova função para ser chamada pelo App.tsx
+  const markChannelAsRead = useCallback((channelId: string) => {
+      if (ws.current?.readyState === WebSocket.OPEN) {
+          const message = { type: 'mark_read', channelId: channelId };
+          console.log('[WebSocket-OUT]:', JSON.stringify(message));
+          ws.current.send(JSON.stringify(message));
+      }
+  }, []);
 
-  return { systemStatus, sendMessage };
+  // Retorna a nova função
+  return { systemStatus, sendMessage, markChannelAsRead };
 };

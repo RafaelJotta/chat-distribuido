@@ -1,3 +1,5 @@
+// frontend/src/components/ChatArea.tsx
+
 import React, { useEffect, useRef } from 'react';
 import { Megaphone, AlertCircle, MessageSquare } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
@@ -12,8 +14,10 @@ interface ChatAreaProps {
   onSendMessage: (content: string, priority: 'normal' | 'urgent') => void;
   openChats: Channel[];
   activeChatId: string | null;
+  // ✅ *** CORREÇÃO: ESSA PROP DEVE RECEBER O ID *** ✅
   onSelectChat: (chatId: string) => void;
   onCloseChat: (chatId: string) => void;
+  unreadCounts: Record<string, number>;
 }
 
 export const ChatArea: React.FC<ChatAreaProps> = ({
@@ -23,8 +27,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
   onSendMessage,
   openChats,
   activeChatId,
-  onSelectChat,
+  onSelectChat, // Está correto, 'selectChat' espera um ID
   onCloseChat,
+  unreadCounts
 }) => {
   const messagesForChannel = activeChannel ? messages[activeChannel.id] || [] : [];
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -42,6 +47,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
       {activeChannel ? (
         <>
           <div className="bg-slate-700 border-b border-slate-600 p-4 flex-shrink-0">
+            {/* ... (cabeçalho do chat) ... */}
             <div className="flex items-center gap-3">
               {activeChannel.type === 'private' ? (
                  <MessageSquare className="w-5 h-5 text-teal-400" />
@@ -58,21 +64,23 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* ... (mensagens) ... */}
             {messagesForChannel.map((message) => (
                 <MessageBubble key={message.id} message={message} isOwn={message.senderId === currentUser.id} currentUserRole={currentUser.role}/>
             ))}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* <<< A BARRA DE ABAS ESTÁ DE VOLTA AQUI >>> */}
           <ChatTabs 
             openChats={openChats}
             activeChatId={activeChatId}
-            onSelectChat={onSelectChat}
+            onSelectChat={onSelectChat} // Passa a função 'selectChat'
             onCloseChat={onCloseChat}
+            unreadCounts={unreadCounts}
           />
           
           <div className="p-4 bg-slate-900 border-t border-slate-700 flex-shrink-0">
+            {/* ... (compositor) ... */}
             {activeChannel.canSendMessage ? (
               <MessageComposer onSendMessage={onSendMessage} />
             ) : (
@@ -81,6 +89,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         </>
       ) : (
+        // ... (nenhum chat) ...
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <MessageSquare className="w-16 h-16 text-gray-600 mx-auto mb-4" />

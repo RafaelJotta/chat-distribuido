@@ -8,7 +8,7 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - /app/node_modules # Impede que o node_modules local sobrescreva o do container
     command: npm run dev -- --host
 
   # API Gateway (Nginx)
@@ -27,9 +27,9 @@ services:
     volumes:
       - ./backend/servico-autenticacao:/app
     environment:
-      - DATABASE_URL=mongodb://mongo:27017
+      - IS_LOCAL=true # Informa ao Python para usar o banco local
     depends_on:
-      - mongo
+      - dynamodb-local # Depende do banco local
 
   # Serviço de Mensagens com Reload
   servico-mensagens:
@@ -37,19 +37,20 @@ services:
     volumes:
       - ./backend/servico-mensagens:/app
     environment:
-      - DATABASE_URL=mongodb://mongo:27017
+      - IS_LOCAL=true # Informa ao Python para usar o banco local
     depends_on:
-      - mongo
+      - dynamodb-local # Depende do banco local
 
-  # Novo: Serviço do Banco de Dados MongoDB
-  mongo:
-    image: mongo:latest
-    container_name: mongo
+  # DynamoDB Local (Modo Em Memória)
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
     ports:
-      - "27017:27017" # Mapeamos a porta para podermos inspecionar o DB localmente
-    volumes:
-      - mongo-data:/data/db
+      - "8000:8000" # Porta padrão do DynamoDB Local
+    # ALTERADO: Usa -inMemory em vez de -dbPath e remove o volume
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    # volumes: # Linha removida - não salva dados em disco neste modo
+    #   - dynamodb-data:/data # Linha removida
 
-# Novo: Define o volume para persistência dos dados do MongoDB
-volumes:
-  mongo-data:
+# volumes: # Seção removida ou comentada pois não há mais volumes persistentes aqui
+#   dynamodb-data: # Linha removida

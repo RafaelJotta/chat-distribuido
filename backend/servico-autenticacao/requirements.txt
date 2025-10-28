@@ -1,19 +1,10 @@
 fastapi
 uvicorn[standard]
 httpx
-motor
+# motor # REMOVIDO
 python-multipart
 fastapi-cors
 pydantic[email]
 bcrypt==3.2.0
 passlib[bcrypt]
-
-
-
-
-
-
-
-
-
-
+boto3 # NOVO

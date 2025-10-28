@@ -1,47 +1,98 @@
 // src/components/RegisterUserModal.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, UserPlus } from 'lucide-react';
 import { User } from '../types';
 
 interface RegisterUserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onRegister: (userData: Omit<User, 'id' | 'avatar' | 'status'>) => void;
+  // ✅ *** CORREÇÃO BUG 1: A prop agora espera uma Promise<boolean> ***
+  onRegister: (userData: Omit<User, 'id' | 'avatar' | 'status'>) => Promise<boolean>;
   currentUserRole: User['role'];
 }
 
+type NewUserRole = 'director' | 'manager' | 'supervisor' | 'employee';
+
 export const RegisterUserModal: React.FC<RegisterUserModalProps> = ({ isOpen, onClose, onRegister, currentUserRole }) => {
+  
+  const getDefaultRole = (): NewUserRole => {
+    if (currentUserRole === 'director') return 'manager';
+    if (currentUserRole === 'manager') return 'supervisor';
+    if (currentUserRole === 'supervisor') return 'employee';
+    return 'employee'; // Fallback
+  };
+  
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'manager' | 'supervisor' | 'employee'>(
-    currentUserRole === 'director' ? 'manager' : 'supervisor'
-  );
+  const [role, setRole] = useState<NewUserRole>(getDefaultRole());
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Adiciona estado de loading
+
+  // ✅ *** CORREÇÃO BUG 1: Função para limpar o formulário ***
+  const clearForm = () => {
+    setName('');
+    setEmail('');
+    setPassword('');
+    setError('');
+    setRole(getDefaultRole());
+  };
+
+  // Limpa o formulário sempre que o modal for aberto
+  useEffect(() => {
+    if (isOpen) {
+      clearForm();
+    }
+  }, [isOpen]); // Dependência 'isOpen' garante que rode ao abrir
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // ✅ *** CORREÇÃO BUG 1 & 2: handleSubmit atualizado ***
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password || !role) {
+    
+    // BUG 2 (Validação): Usa trim() para evitar campos com espaços
+    if (!name.trim() || !email.trim() || !password.trim() || !role) {
       setError('Todos os campos são obrigatórios.');
       return;
     }
+    
     setError('');
-    onRegister({ name, email, password, role });
+    setIsLoading(true); // Ativa o loading
+
+    try {
+      // BUG 1 (Limpeza): Espera o resultado do onRegister
+      const success = await onRegister({ 
+        name: name.trim(), 
+        email: email.trim(), 
+        password, // A senha não deve ter trim()
+        role 
+      });
+      
+      if (success) {
+        // clearForm(); // Não precisa mais, o useEffect cuida disso
+        onClose(); // Fecha o modal
+      }
+      // Se 'success' for falso, o 'alert' no App.tsx cuidou do erro
+      // e o modal permanece aberto para o usuário corrigir.
+
+    } catch (e) {
+      // O alert já foi mostrado no App.tsx
+      console.error(e);
+    } finally {
+      setIsLoading(false); // Desativa o loading
+    }
   };
 
   return (
-    // Fundo semi-transparente
     <div 
       className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50"
       onClick={onClose}
     >
-      {/* Conteúdo do Modal */}
       <div 
         className="bg-slate-800 border border-slate-700 rounded-lg shadow-xl w-full max-w-md p-6 animate-fade-in"
-        onClick={e => e.stopPropagation()} // Impede que o clique dentro do modal o feche
+        onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -68,17 +119,35 @@ export const RegisterUserModal: React.FC<RegisterUserModalProps> = ({ isOpen, on
           </div>
           <div>
             <label htmlFor="role" className="block text-sm font-medium text-gray-300 mb-1">Cargo</label>
-            <select id="role" value={role} onChange={e => setRole(e.target.value as any)} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-white">
-              {/* Diretor pode cadastrar Gerentes e Supervisores */}
+            
+            <select id="role" value={role} onChange={e => setRole(e.target.value as NewUserRole)} className="w-full bg-slate-700 border border-slate-600 rounded-md p-2 text-white">
+              
+              {/* Diretor pode cadastrar todos */}
               {currentUserRole === 'director' && (
                 <>
+                  <option value="director">Diretor</option>
                   <option value="manager">Gerente</option>
                   <option value="supervisor">Supervisor</option>
+                  <option value="employee">Funcionário</option>
                 </>
               )}
-              {/* Gerente só pode cadastrar Supervisores */}
+              
+              {/* Gerente pode cadastrar Supervisor e Funcionário */}
               {currentUserRole === 'manager' && (
-                <option value="supervisor">Supervisor</option>
+                <>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="employee">Funcionário</option>
+                </>
+              )}
+
+              {/* Supervisor só pode cadastrar Funcionário */}
+              {currentUserRole === 'supervisor' && (
+                <option value="employee">Funcionário</option>
+              )}
+
+              {/* Funcionário não vê o botão, mas por segurança não mostramos nada */}
+              {currentUserRole === 'employee' && (
+                <option value="employee" disabled>Sem permissão</option>
               )}
             </select>
           </div>
@@ -86,8 +155,10 @@ export const RegisterUserModal: React.FC<RegisterUserModalProps> = ({ isOpen, on
           {error && <p className="text-sm text-red-400">{error}</p>}
 
           <div className="flex justify-end gap-3 pt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-md text-white">Cancelar</button>
-            <button type="submit" className="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-md text-white font-semibold">Cadastrar</button>
+            <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-md text-white disabled:opacity-50">Cancelar</button>
+            <button type="submit" disabled={isLoading} className="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-md text-white font-semibold disabled:opacity-50">
+              {isLoading ? "Cadastrando..." : "Cadastrar"}
+            </button>
           </div>
         </form>
       </div>
