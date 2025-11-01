@@ -145,18 +145,17 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def get_next_user_id(role: str) -> str:
-    """Gera um ID atômico (Requisito de Coordenação)"""
+def get_next_user_id(role: str) -> str:  # Gera um ID atômico (Requisito de Coordenação)
     try:
         response = CONTADORES_TABLE.update_item(
             Key={'role': role},
-            UpdateExpression='SET #c = #c + :val',
+            UpdateExpression='SET #c = #c + :val', # Incrementa o contador (ATÔMICO)
             ExpressionAttributeNames={'#c': 'count'},
             ExpressionAttributeValues={':val': 1},
             ReturnValues="UPDATED_NEW"
         )
         new_count = int(response['Attributes']['count'])
-        # ✅ *** CORREÇÃO: Mapeia 'employee' para 'emp' ***
+        # CORREÇÃO: Mapeia 'employee' para 'emp'
         prefix = role[:3]
         if role == 'employee':
             prefix = 'emp'
@@ -168,7 +167,7 @@ def get_next_user_id(role: str) -> str:
 
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
-async def register_user(user: UserCreate):
+async def register_user(user: UserCreate): # Registra um novo usuário e atualiza a hierarquia
     
     user_id = get_next_user_id(user.role)
     hashed_password = get_password_hash(user.password)
@@ -184,8 +183,9 @@ async def register_user(user: UserCreate):
     try:
         USUARIOS_TABLE.put_item(
             Item=user_document,
-            ConditionExpression='attribute_not_exists(email)'
+            ConditionExpression='attribute_not_exists(email)' # Garante unicidade do email
         )
+        # Essa condição evita sobrescrever um usuário existente com o mesmo email.
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             raise HTTPException(status_code=400, detail="Email já registrado")
