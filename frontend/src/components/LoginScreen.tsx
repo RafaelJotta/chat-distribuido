@@ -21,7 +21,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      // Esta lógica agora se comunicará com seu backend real
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -29,8 +28,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       });
 
       if (response.ok) {
-        const userData: User = await response.json();
-        onLogin(userData);
+        const data = await response.json();
+        localStorage.setItem('auth_token', data.access_token);
+        onLogin(data.user);
       } else {
         setError('Credenciais inválidas. Verifique seu email e senha.');
       }

@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
@@ -8,19 +9,20 @@ import os
 from passlib.context import CryptContext
 from typing import Optional
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
 
-# --- Configuração do Banco de Dados ---
+# --- Configuração JWT (Segurança) ---
+SECRET_KEY = "chave-super-secreta-do-trabalho-sis-dist" # Em produção, use variável de ambiente
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# --- Configuração do Banco ---
 IS_LOCAL = os.getenv("IS_LOCAL", "false").lower() == "true"
 
 if IS_LOCAL:
     print(">>> MODO DE DESENVOLVIMENTO: Conectando ao DynamoDB Local <<<")
-    dynamodb = boto3.resource(
-        'dynamodb',
-        endpoint_url='http://dynamodb-local:8000',
-        region_name='us-east-1',
-        aws_access_key_id='dummykey',
-        aws_secret_access_key='dummysecret'
-    )
+    dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb-local:8000', region_name='us-east-1', aws_access_key_id='dummykey', aws_secret_access_key='dummysecret')
 else:
     print(">>> MODO DE PRODUÇÃO: Conectando ao AWS DynamoDB <<<")
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -30,104 +32,50 @@ HIERARQUIA_TABLE = dynamodb.Table('ChatHierarquia')
 CONTADORES_TABLE = dynamodb.Table('ChatContadores')
 READ_RECEIPTS_TABLE = dynamodb.Table('ChatReadReceipts')
 
-
-# --- Lógica de Inicialização (Lifespan) ---
-
+# --- Lifespan (Inicialização) ---
 def create_table_if_not_exists(table_name, key_schema, attribute_definitions):
-    """Helper para criar tabelas no modo local"""
     try:
-        dynamodb.create_table(
-            TableName=table_name,
-            KeySchema=key_schema,
-            AttributeDefinitions=attribute_definitions,
-            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-        )
-        print(f"Criando tabela '{table_name}', aguarde...")
+        dynamodb.create_table(TableName=table_name, KeySchema=key_schema, AttributeDefinitions=attribute_definitions, ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5})
+        print(f"Criando tabela '{table_name}'...")
         table = dynamodb.Table(table_name)
         table.wait_until_exists()
-        print(f"Tabela '{table_name}' criada com sucesso.")
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'ResourceInUseException':
-            print(f"Tabela '{table_name}' já existe.")
-        else:
-            print(f"Erro inesperado ao criar tabela '{table_name}': {e}")
-    except Exception as e:
-        print(f"Erro geral ao criar tabela '{table_name}': {e}")
-
+    except ClientError: pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if IS_LOCAL:
-        print(">>> MODO LOCAL: Verificando/Criando tabelas do serviço de autenticação...")
+        print(">>> MODO LOCAL: Verificando tabelas...")
+        create_table_if_not_exists('ChatUsuarios', [{'AttributeName': 'email', 'KeyType': 'HASH'}], [{'AttributeName': 'email', 'AttributeType': 'S'}])
+        create_table_if_not_exists('ChatHierarquia', [{'AttributeName': 'id', 'KeyType': 'HASH'}], [{'AttributeName': 'id', 'AttributeType': 'S'}])
+        create_table_if_not_exists('ChatContadores', [{'AttributeName': 'role', 'KeyType': 'HASH'}], [{'AttributeName': 'role', 'AttributeType': 'S'}])
+        create_table_if_not_exists('ChatReadReceipts', [{'AttributeName': 'userId', 'KeyType': 'HASH'}, {'AttributeName': 'channelId', 'KeyType': 'RANGE'}], [{'AttributeName': 'userId', 'AttributeType': 'S'}, {'AttributeName': 'channelId', 'AttributeType': 'S'}])
         
-        create_table_if_not_exists(
-            table_name='ChatUsuarios',
-            key_schema=[{'AttributeName': 'email', 'KeyType': 'HASH'}],
-            attribute_definitions=[{'AttributeName': 'email', 'AttributeType': 'S'}]
-        )
-        
-        create_table_if_not_exists(
-            table_name='ChatHierarquia',
-            key_schema=[{'AttributeName': 'id', 'KeyType': 'HASH'}],
-            attribute_definitions=[{'AttributeName': 'id', 'AttributeType': 'S'}]
-        )
-
-        create_table_if_not_exists(
-            table_name='ChatContadores',
-            key_schema=[{'AttributeName': 'role', 'KeyType': 'HASH'}],
-            attribute_definitions=[{'AttributeName': 'role', 'AttributeType': 'S'}]
-        )
-
-        create_table_if_not_exists(
-            table_name='ChatReadReceipts',
-            key_schema=[
-                {'AttributeName': 'userId', 'KeyType': 'HASH'},
-                {'AttributeName': 'channelId', 'KeyType': 'RANGE'}
-            ],
-            attribute_definitions=[
-                {'AttributeName': 'userId', 'AttributeType': 'S'},
-                {'AttributeName': 'channelId', 'AttributeType': 'S'}
-            ]
-        )
-        
-        print(">>> MODO LOCAL: Populando contadores iniciais...")
-        roles = ['director', 'manager', 'supervisor', 'employee'] # Já inclui 'employee'
-        
+        roles = ['director', 'manager', 'supervisor', 'employee']
         for role in roles:
             try:
-                CONTADORES_TABLE.put_item(
-                    Item={'role': role, 'count': 0},
-                    ConditionExpression='attribute_not_exists(#r)',
-                    ExpressionAttributeNames={'#r': 'role'}
-                )
-                print(f"Contador para '{role}' inicializado com 0.")
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-                    print(f"Contador para '{role}' já existe. Ignorando.")
-                else:
-                    print(f"Erro ao popular contador '{role}': {e}")
-            except Exception as e:
-                print(f"Erro geral ao popular contador: {e}")
-
-        print("Povoamento de contadores concluído.")
-
+                CONTADORES_TABLE.put_item(Item={'role': role, 'count': 0}, ConditionExpression='attribute_not_exists(#r)', ExpressionAttributeNames={'#r': 'role'})
+            except ClientError: pass
     yield
-    
-    print("Finalizando serviço de autenticação...")
 
-# --- Configuração de Hashing de Senha ---
+# --- Auth ---
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     name: str
-    role: str # O tipo 'str' já aceita 'director', 'manager', 'supervisor', 'employee'
+    role: str
     manager_id: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
 
 app = FastAPI(lifespan=lifespan)
 
@@ -145,30 +93,34 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def get_next_user_id(role: str) -> str:  # Gera um ID atômico (Requisito de Coordenação)
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_next_user_id(role: str) -> str:
     try:
         response = CONTADORES_TABLE.update_item(
             Key={'role': role},
-            UpdateExpression='SET #c = #c + :val', # Incrementa o contador (ATÔMICO)
+            UpdateExpression='SET #c = #c + :val',
             ExpressionAttributeNames={'#c': 'count'},
             ExpressionAttributeValues={':val': 1},
             ReturnValues="UPDATED_NEW"
         )
         new_count = int(response['Attributes']['count'])
-        # CORREÇÃO: Mapeia 'employee' para 'emp'
         prefix = role[:3]
-        if role == 'employee':
-            prefix = 'emp'
-            
+        if role == 'employee': prefix = 'emp'
         return f"{prefix}-{new_count}"
     except ClientError as e:
-        print(f"Erro ao gerar ID para role '{role}': {e}")
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar ID de usuário: {e}")
-
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar ID: {e}")
 
 @app.post("/register", status_code=status.HTTP_201_CREATED)
-async def register_user(user: UserCreate): # Registra um novo usuário e atualiza a hierarquia
-    
+async def register_user(user: UserCreate):
     user_id = get_next_user_id(user.role)
     hashed_password = get_password_hash(user.password)
     
@@ -181,20 +133,13 @@ async def register_user(user: UserCreate): # Registra um novo usuário e atualiz
     }
 
     try:
-        USUARIOS_TABLE.put_item(
-            Item=user_document,
-            ConditionExpression='attribute_not_exists(email)' # Garante unicidade do email
-        )
-        # Essa condição evita sobrescrever um usuário existente com o mesmo email.
+        USUARIOS_TABLE.put_item(Item=user_document, ConditionExpression='attribute_not_exists(email)')
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             raise HTTPException(status_code=400, detail="Email já registrado")
-        else:
-            print(f"Erro no DynamoDB (USUARIOS_TABLE): {e}")
-            raise HTTPException(status_code=500, detail="Erro ao registrar usuário.")
+        raise HTTPException(status_code=500, detail="Erro ao registrar usuário.")
 
     new_node = {"id": user_id, "name": user.name, "role": user.role, "email": user.email, "children": []}
-    
     try:
         if user.manager_id:
             HIERARQUIA_TABLE.update_item(
@@ -204,40 +149,41 @@ async def register_user(user: UserCreate): # Registra um novo usuário e atualiz
                 ExpressionAttributeValues={':new_node': [new_node], ':empty_list': []}
             )
         else:
-            # Se não há manager_id, é um nó raiz (provavelmente um Diretor)
-            HIERARQUIA_TABLE.put_item(
-                Item=new_node,
-                ConditionExpression='attribute_not_exists(id)'
-            )
-    except ClientError as e:
-        print(f"Erro ao atualizar hierarquia (HIERARQUIA_TABLE): {e}")
-        # Se falhar aqui, o usuário foi criado mas não está na hierarquia.
-        # Em produção, usaríamos um padrão SAGA para reverter a criação do usuário.
-        raise HTTPException(status_code=500, detail="Usuário criado, mas falha ao atualizar hierarquia.")
+            HIERARQUIA_TABLE.put_item(Item=new_node, ConditionExpression='attribute_not_exists(id)')
+    except ClientError: pass
 
     return {"message": "Usuário criado com sucesso!", "user_id": user_id}
 
-@app.post("/login")
+# ✅ ATUALIZADO: Retorna o Token
+@app.post("/login", response_model=Token)
 async def login(request: LoginRequest):
-    
     try:
         response = USUARIOS_TABLE.get_item(Key={'email': request.email})
         user_record = response.get('Item')
-    except ClientError as e:
-        print(f"Erro no DynamoDB (USUARIOS_TABLE GetItem): {e}")
-        raise HTTPException(status_code=500, detail="Erro ao fazer login.")
+    except ClientError:
+        raise HTTPException(status_code=500, detail="Erro interno.")
 
     if user_record and verify_password(request.password, user_record["hashed_password"]):
         user_data = {"id": user_record["id"], "name": user_record["name"], "role": user_record["role"]}
         
-        MESSAGING_SERVICE_URL = "http://servico-mensagens:18081/internal/user-connected"
+        # Cria o Token JWT
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user_record["email"], "role": user_record["role"], "id": user_record["id"]},
+            expires_delta=access_token_expires
+        )
+
+        # Notifica mensagens (mantido para compatibilidade)
         try:
             async with httpx.AsyncClient() as client:
-                await client.post(MESSAGING_SERVICE_URL, json=user_data)
-        except httpx.RequestError as e:
-            print(f"ERRO: Falha ao notificar o serviço de mensagens: {e}")
+                await client.post("http://servico-mensagens:18081/internal/user-connected", json=user_data)
+        except httpx.RequestError: pass
             
-        return {**user_data, "status": "online"}
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {**user_data, "status": "online"}
+        }
 
     raise HTTPException(status_code=401, detail="Credenciais inválidas")
 

@@ -3,8 +3,8 @@ services:
   # API Gateway é o ponto de entrada único
   api-gateway:
     build: ./api-gateway
-    # ✅ *** CORREÇÃO AQUI *** ✅
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-api-gateway:latest
+    restart: always
     ports:
       - "8080:80"
     depends_on:
@@ -12,12 +12,11 @@ services:
       - servico-autenticacao
       - servico-mensagens
 
-  # Serviço de Autenticação em Python
   servico-autenticacao:
     build:
       context: ./backend/servico-autenticacao
-    # ✅ *** CORREÇÃO AQUI *** ✅
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-servico-autenticacao:latest
+    restart: always
     expose:
       - "18080"
     healthcheck:
@@ -30,8 +29,8 @@ services:
   servico-mensagens:
     build:
       context: ./backend/servico-mensagens
-    # (Este já estava correto no seu arquivo original)
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-servico-mensagens:latest
+    restart: always
     expose:
       - "18081"
     depends_on:
@@ -42,12 +41,9 @@ services:
   frontend:
     build:
       context: ./frontend
-    # (Este já estava correto no seu arquivo original)
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-frontend:latest
+    restart: always
     expose:
       - "80"
 
-# O banco de dados DynamoDB está na nuvem, então não precisamos dele aqui.
-# Os volumes também não são necessários na produção (exceto se você quiser
-# persistir algo no EC2, mas para o DynamoDB não precisa).
 volumes: {}

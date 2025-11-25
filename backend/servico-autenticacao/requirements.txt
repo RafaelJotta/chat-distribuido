@@ -7,4 +7,5 @@ fastapi-cors
 pydantic[email]
 bcrypt==3.2.0
 passlib[bcrypt]
-boto3 # NOVO
+boto3
+python-jose[cryptography]
