@@ -10,15 +10,58 @@ import os
 from contextlib import asynccontextmanager
 import time # <--- NOVO: time
 
+
+def connect_with_retry(max_retries: int = 3, delay_seconds: int = 2):
+    """Tenta criar o recurso DynamoDB com retries simples.
+
+    Esta função melhora a tolerância a falhas operacionais ao lidar com cenários em que o
+    DynamoDB Local ou o serviço AWS ainda está inicializando ou momentaneamente indisponível.
+    Em vez de falhar imediatamente na primeira tentativa de conexão, o serviço de mensagens
+    aguarda alguns segundos e tenta novamente, até o limite configurado de tentativas.
+
+    Se todas as tentativas falharem, a exceção é propagada para que o FastAPI registre o erro
+    e o container possa ser reiniciado pelo orquestrador (ex.: Docker Compose), mantendo o
+    comportamento atual de falha visível, porém com maior resiliência a falhas transitórias.
+    """
+
+    last_exception = None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            if IS_LOCAL:
+                print(f"[DynamoDB][Tentativa {attempt}/{max_retries}] Conectando ao DynamoDB Local...")
+                return boto3.resource(
+                    'dynamodb',
+                    endpoint_url='http://dynamodb-local:8000',
+                    region_name='us-east-1',
+                    aws_access_key_id='dummykey',
+                    aws_secret_access_key='dummysecret'
+                )
+            else:
+                print(f"[DynamoDB][Tentativa {attempt}/{max_retries}] Conectando ao AWS DynamoDB...")
+                return boto3.resource('dynamodb', region_name='us-east-1')
+        except Exception as exc:
+            last_exception = exc
+            print(f"[DynamoDB][ERRO] Falha ao conectar (tentativa {attempt}/{max_retries}): {exc}")
+
+            if attempt < max_retries:
+                print(f"[DynamoDB] Aguardando {delay_seconds}s antes de tentar novamente...")
+                time.sleep(delay_seconds)
+
+    print("[DynamoDB][FALHA] Todas as tentativas de conexão ao DynamoDB falharam. Abortando inicialização do serviço de mensagens.")
+    raise last_exception if last_exception else RuntimeError("Falha desconhecida ao conectar ao DynamoDB")
+
 # --- Configuração do Banco ---
 IS_LOCAL = os.getenv("IS_LOCAL", "false").lower() == "true"
 
 if IS_LOCAL:
-    print(">>> MODO DE DESENVOLVIMENTO: Conectando ao DynamoDB Local <<<")
-    dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb-local:8000', region_name='us-east-1', aws_access_key_id='dummykey', aws_secret_access_key='dummysecret')
+    print(">>> MODO DE DESENVOLVIMENTO: Conectando ao DynamoDB Local (com retry) <<<")
 else:
-    print(">>> MODO DE PRODUÇÃO: Conectando ao AWS DynamoDB <<<")
-    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    print(">>> MODO DE PRODUÇÃO: Conectando ao AWS DynamoDB (com retry) <<<")
+
+# A inicialização do recurso DynamoDB agora passa por um mecanismo de retry simples,
+# reduzindo falhas causadas por atrasos temporários na disponibilidade do DynamoDB.
+dynamodb = connect_with_retry()
 
 HIERARQUIA_TABLE = dynamodb.Table('ChatHierarquia')
 MENSAGENS_TABLE = dynamodb.Table('ChatMensagens')
