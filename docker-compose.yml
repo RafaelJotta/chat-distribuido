@@ -33,6 +33,12 @@ services:
     restart: always
     expose:
       - "18081"
+    # ✅ NOVO: Healthcheck adicionado
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
       servico-autenticacao:
         condition: service_healthy

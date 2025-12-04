@@ -1,12 +1,10 @@
-// frontend/src/hooks/useWebSocket.ts
-
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Message, SystemStatus, User, HierarchyNode } from '../types';
 import { DirectoryData } from '../components/DirectoryList';
 
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
-// ... (funções processInitialMessages e processHierarchyToDirectoryData não mudam) ...
+// --- Funções Auxiliares (Mantidas iguais) ---
 const processInitialMessages = (messages: Message[]): Record<string, Message[]> => {
   const messagesByChannel: Record<string, Message[]> = {};
   for (const message of messages) {
@@ -18,6 +16,7 @@ const processInitialMessages = (messages: Message[]): Record<string, Message[]> 
   }
   return messagesByChannel;
 };
+
 const processHierarchyToDirectoryData = (nodes: HierarchyNode[]): DirectoryData => {
   const directory: DirectoryData = { director: undefined, managers: [], supervisors: [], employees: [] };
   const traverse = (nodeList: HierarchyNode[] = []) => {
@@ -32,14 +31,11 @@ const processHierarchyToDirectoryData = (nodes: HierarchyNode[]): DirectoryData 
   traverse(nodes);
   return directory;
 };
-// ... (fim das funções que não mudam) ...
-
 
 interface UseWebSocketProps {
   currentUser: User | null;
   setDirectoryData: SetState<DirectoryData>;
   setMessages: SetState<Record<string, Message[]>>;
-  // ✅ *** NOVO PASSO 3.A *** ✅
   ensureChatTabExists: (channelId: string, name: string, type?: 'private' | 'group') => void;
   activeChatId: string | null;
   setUnreadCounts: SetState<Record<string, number>>;
@@ -54,24 +50,38 @@ export const useWebSocket = ({
   setUnreadCounts
 }: UseWebSocketProps) => {
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({ status: 'reconnecting', message: 'Conectando...' });
+  
   const ws = useRef<WebSocket | null>(null);
   const retryTimeoutRef = useRef<number | null>(null);
   const activeChatIdRef = useRef(activeChatId);
   
+  // ✅ NOVO: Contador de tentativas para Exponential Backoff
+  const reconnectAttempts = useRef(0);
+
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
 
   const connect = useCallback(() => {
     if (!currentUser || (ws.current && ws.current.readyState === WebSocket.OPEN)) return;
+    
+    // Limpa timeout anterior se houver
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
 
-    const wsUrl = `ws://${window.location.host}/ws`;
+    // Ajusta URL para ambiente (Dev vs Prod/Docker)
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    
+    console.log(`[WebSocket] Tentativa de conexão #${reconnectAttempts.current + 1}...`);
     ws.current = new WebSocket(wsUrl);
 
     ws.current.onopen = () => {
-      console.log('Conectado ao WebSocket');
+      console.log('[WebSocket] Conectado com sucesso.');
       setSystemStatus({ status: 'connected', message: 'Conectado' });
+      
+      // ✅ Resetamos o contador de tentativas ao conectar com sucesso
+      reconnectAttempts.current = 0; 
+
       if (ws.current && currentUser) {
         ws.current.send(JSON.stringify({ 
           type: 'user_connect', 
@@ -82,17 +92,15 @@ export const useWebSocket = ({
     };
 
     ws.current.onmessage = (event) => {
-      console.log('[WebSocket-IN]:', event.data);
+      // console.log('[WebSocket-IN]:', event.data); // Comentado para limpar console, descomente se necessário
       
       try {
         const data = JSON.parse(event.data);
 
         if (data.type === 'initialState') {
-          const { hierarchy, messages, unreadCounts } = data.payload; // <--- Pega as contagens
+          const { hierarchy, messages, unreadCounts } = data.payload;
           setDirectoryData(processHierarchyToDirectoryData(hierarchy));
           setMessages(processInitialMessages(messages));
-          // ✅ *** NOVO PASSO 3.B *** ✅
-          // Seta o estado de não lidos com os dados persistidos
           setUnreadCounts(unreadCounts || {}); 
         
         } else if (data.type === 'status_update') {
@@ -111,12 +119,12 @@ export const useWebSocket = ({
           
           setMessages(prev => {
             const oldMessages = prev[channelId] || [];
-            const newChannelMessages = [...oldMessages, message];
-            return { ...prev, [channelId]: newChannelMessages };
+            // Evita duplicatas se o backend reenviar
+            if (oldMessages.some(m => m.id === message.id)) return prev;
+            return { ...prev, [channelId]: [...oldMessages, message] };
           });
           
           if (channelId !== activeChatIdRef.current && senderId !== currentUser?.id) {
-            console.log(`INCREMENTANDO CONTAGEM PARA: ${channelId}`);
             setUnreadCounts(prevCounts => ({
               ...prevCounts,
               [channelId]: (prevCounts[channelId] || 0) + 1
@@ -127,18 +135,31 @@ export const useWebSocket = ({
             ensureChatTabExists(channelId, senderName, 'private');
           }
         }
-      } catch (error) { console.error("ERRO AO PROCESSAR MENSAGEM:", error, "DADOS:", event.data); }
+      } catch (error) { console.error("ERRO AO PROCESSAR MENSAGEM:", error); }
     };
 
-    ws.current.onerror = (error) => console.error("Erro no WebSocket:", error);
+    ws.current.onerror = (error) => {
+        // Não logamos o erro completo para evitar poluição visual no console do navegador durante quedas
+        console.warn("[WebSocket] Erro de conexão detectado.");
+    };
     
     ws.current.onclose = () => {
-      console.log('WebSocket desconectado. Tentando reconectar em 5 segundos...');
-      setSystemStatus({ status: 'reconnecting', message: 'Reconectando...' });
+      // ✅ Algoritmo de Exponential Backoff
+      // Tenta em: 1s, 2s, 4s, 8s, 16s, max 30s.
+      const baseDelay = 1000;
+      const maxDelay = 30000;
+      const delay = Math.min(maxDelay, Math.pow(2, reconnectAttempts.current) * baseDelay);
+      
+      console.log(`[WebSocket] Desconectado. Reconectando em ${delay}ms...`);
+      setSystemStatus({ status: 'reconnecting', message: `Reconectando (${reconnectAttempts.current + 1})...` });
+      
+      reconnectAttempts.current += 1;
+      
       if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = window.setTimeout(connect, 5000);
+      retryTimeoutRef.current = window.setTimeout(connect, delay);
     };
-  }, [currentUser, setDirectoryData, setMessages, ensureChatTabExists, setUnreadCounts]);
+
+  }, [currentUser, setDirectoryData, setMessages, ensureChatTabExists, setUnreadCounts]); // Dependências
 
   useEffect(() => {
     if (currentUser) {
@@ -147,7 +168,7 @@ export const useWebSocket = ({
     return () => {
       if(retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
       if (ws.current) {
-        ws.current.onclose = null; 
+        ws.current.onclose = null; // Evita loop ao desmontar
         ws.current.close();
       }
     };
@@ -155,21 +176,18 @@ export const useWebSocket = ({
 
   const sendMessage = useCallback((message: any) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
-      console.log('[WebSocket-OUT]:', JSON.stringify(message));
       ws.current.send(JSON.stringify(message));
+    } else {
+        console.warn("Tentativa de enviar mensagem sem conexão ativa.");
     }
   }, []);
   
-  // ✅ *** NOVO PASSO 3.C *** ✅
-  // Nova função para ser chamada pelo App.tsx
   const markChannelAsRead = useCallback((channelId: string) => {
       if (ws.current?.readyState === WebSocket.OPEN) {
           const message = { type: 'mark_read', channelId: channelId };
-          console.log('[WebSocket-OUT]:', JSON.stringify(message));
           ws.current.send(JSON.stringify(message));
       }
   }, []);
 
-  // Retorna a nova função
   return { systemStatus, sendMessage, markChannelAsRead };
 };

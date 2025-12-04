@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request # <--- NOVO: Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from pydantic import BaseModel
 import json
 from datetime import datetime
@@ -8,28 +8,24 @@ from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
 import os
 from contextlib import asynccontextmanager
-import time # <--- NOVO: time
+import time
+import logging
 
+# --- Configuração de Logs ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("msg-service")
 
-def connect_with_retry(max_retries: int = 3, delay_seconds: int = 2):
-    """Tenta criar o recurso DynamoDB com retries simples.
-
-    Esta função melhora a tolerância a falhas operacionais ao lidar com cenários em que o
-    DynamoDB Local ou o serviço AWS ainda está inicializando ou momentaneamente indisponível.
-    Em vez de falhar imediatamente na primeira tentativa de conexão, o serviço de mensagens
-    aguarda alguns segundos e tenta novamente, até o limite configurado de tentativas.
-
-    Se todas as tentativas falharem, a exceção é propagada para que o FastAPI registre o erro
-    e o container possa ser reiniciado pelo orquestrador (ex.: Docker Compose), mantendo o
-    comportamento atual de falha visível, porém com maior resiliência a falhas transitórias.
-    """
-
+def connect_with_retry(max_retries: int = 5, delay_seconds: int = 3):
+    """Tenta criar o recurso DynamoDB com retries simples e logs."""
     last_exception = None
 
     for attempt in range(1, max_retries + 1):
         try:
             if IS_LOCAL:
-                print(f"[DynamoDB][Tentativa {attempt}/{max_retries}] Conectando ao DynamoDB Local...")
+                logger.info(f"[DynamoDB] Tentativa {attempt}/{max_retries} - Conectando ao DynamoDB Local...")
                 return boto3.resource(
                     'dynamodb',
                     endpoint_url='http://dynamodb-local:8000',
@@ -38,29 +34,27 @@ def connect_with_retry(max_retries: int = 3, delay_seconds: int = 2):
                     aws_secret_access_key='dummysecret'
                 )
             else:
-                print(f"[DynamoDB][Tentativa {attempt}/{max_retries}] Conectando ao AWS DynamoDB...")
+                logger.info(f"[DynamoDB] Tentativa {attempt}/{max_retries} - Conectando ao AWS DynamoDB...")
                 return boto3.resource('dynamodb', region_name='us-east-1')
         except Exception as exc:
             last_exception = exc
-            print(f"[DynamoDB][ERRO] Falha ao conectar (tentativa {attempt}/{max_retries}): {exc}")
+            logger.warning(f"[DynamoDB] Erro de conexão (tentativa {attempt}/{max_retries}): {exc}")
 
             if attempt < max_retries:
-                print(f"[DynamoDB] Aguardando {delay_seconds}s antes de tentar novamente...")
+                logger.info(f"[DynamoDB] Aguardando {delay_seconds}s antes de tentar novamente...")
                 time.sleep(delay_seconds)
 
-    print("[DynamoDB][FALHA] Todas as tentativas de conexão ao DynamoDB falharam. Abortando inicialização do serviço de mensagens.")
+    logger.critical("[DynamoDB] Todas as tentativas de conexão falharam. Abortando.")
     raise last_exception if last_exception else RuntimeError("Falha desconhecida ao conectar ao DynamoDB")
 
 # --- Configuração do Banco ---
 IS_LOCAL = os.getenv("IS_LOCAL", "false").lower() == "true"
 
 if IS_LOCAL:
-    print(">>> MODO DE DESENVOLVIMENTO: Conectando ao DynamoDB Local (com retry) <<<")
+    logger.info(">>> MODO DE DESENVOLVIMENTO: Iniciando <<<")
 else:
-    print(">>> MODO DE PRODUÇÃO: Conectando ao AWS DynamoDB (com retry) <<<")
+    logger.info(">>> MODO DE PRODUÇÃO: Iniciando <<<")
 
-# A inicialização do recurso DynamoDB agora passa por um mecanismo de retry simples,
-# reduzindo falhas causadas por atrasos temporários na disponibilidade do DynamoDB.
 dynamodb = connect_with_retry()
 
 HIERARQUIA_TABLE = dynamodb.Table('ChatHierarquia')
@@ -79,25 +73,30 @@ def create_table_if_not_exists(table_name, key_schema, attribute_definitions):
 async def lifespan(app: FastAPI):
     if IS_LOCAL:
         create_table_if_not_exists('ChatMensagens', [{'AttributeName': 'channelId', 'KeyType': 'HASH'}, {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}], [{'AttributeName': 'channelId', 'AttributeType': 'S'}, {'AttributeName': 'timestamp', 'AttributeType': 'S'}])
+    logger.info("Serviço de Mensagens pronto para receber conexões.")
     yield
 
 app = FastAPI(lifespan=lifespan)
 active_connections: Dict[str, WebSocket] = {}
 
-# ✅ NOVO: Middleware de Logs
+# ✅ Middleware de Logs
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
-    print(f"LOG [MENSAGENS]: {request.method} {request.url.path} - Status: {response.status_code} - Tempo: {process_time:.4f}s")
+    # Ignora logs do health check para não poluir o terminal, se desejar
+    if request.url.path != "/health":
+        logger.info(f"REQ: {request.method} {request.url.path} - Status: {response.status_code} - Tempo: {process_time:.4f}s")
     return response
 
 async def fetch_hierarchy_from_db():
     try:
         response = HIERARQUIA_TABLE.scan()
         return response.get('Items', [])
-    except ClientError: return []
+    except ClientError as e:
+        logger.error(f"Erro ao buscar hierarquia: {e}")
+        return []
 
 def get_group_members_ids(channel_id: str, hierarchy: List[Dict]) -> List[str]:
     try: role_group = channel_id.split("group-")[1]
@@ -185,9 +184,9 @@ async def websocket_endpoint(websocket: WebSocket):
             initial_state = {"hierarchy": hierarchy_data, "messages": messages_data, "unreadCounts": unread_counts}
             await websocket.send_text(json.dumps({"type": "initialState", "payload": initial_state}))
             
-            # Log de conexão WebSocket
-            print(f"LOG [WS]: Usuário {user_id} conectado.")
+            logger.info(f"WS: Usuário conectado: {user_id}")
         else:
+            logger.warning("WS: Payload de conexão inválido ou incompleto.")
             await websocket.close()
             return
 
@@ -207,8 +206,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 message_data["timestamp"] = datetime.now().isoformat()
                 try:
                     MENSAGENS_TABLE.put_item(Item=message_data)
-                    print(f"LOG [WS]: Mensagem salva de {message_data.get('senderId')} para {message_data.get('channelId')}")
-                except ClientError: pass
+                    logger.info(f"Msg salva: {message_data.get('senderId')} -> {message_data.get('channelId')}")
+                except ClientError as e:
+                    logger.error(f"Erro ao salvar mensagem: {e}")
                 
                 channel_id = message_data.get("channelId", "")
                 sender_id = message_data.get("senderId")
@@ -234,7 +234,11 @@ async def websocket_endpoint(websocket: WebSocket):
         if user_id and user_id in active_connections:
             del active_connections[user_id]
             await broadcast_status_update(user_id, "offline")
-            print(f"LOG [WS]: Usuário {user_id} desconectado.")
+            logger.info(f"WS: Usuário desconectado: {user_id}")
+    except Exception as e:
+        logger.error(f"Erro inesperado no WebSocket: {e}")
+        if user_id and user_id in active_connections:
+             del active_connections[user_id]
 
 class UserInfo(BaseModel):
     id: str
@@ -243,4 +247,11 @@ class UserInfo(BaseModel):
 
 @app.post("/internal/user-connected")
 async def user_connected(info: UserInfo):
+    logger.info(f"Notificação Interna: User connected {info.id}")
     return {"message": "Notification received"}
+
+# ✅ Endpoint de Health Check (Novo)
+@app.get("/health")
+async def health_check():
+    """Retorna status 200 se o serviço estiver online."""
+    return {"status": "OK", "service": "mensagens"}
