@@ -1,11 +1,9 @@
 # Arquivos de ambiente e segredos
-# NUNCA envie estes arquivos para o repositório
 .env
 .env.*
 !.env.example
 
 # Dependências de Pacotes
-# Ignora pastas de dependências em qualquer lugar do projeto
 node_modules/
 /frontend/node_modules/
 

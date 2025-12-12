@@ -12,28 +12,28 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import time
-import logging # <--- NOVO
+import logging
 
-# --- Configuração de Logs ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("auth-service")
 
-# --- Configuração JWT ---
 SECRET_KEY = "chave-super-secreta-do-trabalho-sis-dist"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 IS_LOCAL = os.getenv("IS_LOCAL", "false").lower() == "true"
 
-def connect_with_retry(max_retries: int = 5, delay_seconds: int = 3):
+def connect_with_retry(max_retries: int = 6, base_delay: int = 1, max_delay_cap: int = 32):
+   
     last_exception = None
-    for attempt in range(1, max_retries + 1):
+    
+    for attempt in range(max_retries):
         try:
             if IS_LOCAL:
-                logger.info(f"[DynamoDB] Tentativa {attempt}/{max_retries} - Conectando Local...")
+                logger.info(f"[DynamoDB] Tentativa {attempt + 1}/{max_retries} - Conectando Local...")
                 return boto3.resource(
                     'dynamodb',
                     endpoint_url='http://dynamodb-local:8000',
@@ -42,15 +42,20 @@ def connect_with_retry(max_retries: int = 5, delay_seconds: int = 3):
                     aws_secret_access_key='dummysecret'
                 )
             else:
-                logger.info(f"[DynamoDB] Tentativa {attempt}/{max_retries} - Conectando AWS...")
+                logger.info(f"[DynamoDB] Tentativa {attempt + 1}/{max_retries} - Conectando AWS...")
                 return boto3.resource('dynamodb', region_name='us-east-1')
+        
         except Exception as exc:
             last_exception = exc
-            logger.warning(f"[DynamoDB] Erro na conexão (tentativa {attempt}): {exc}")
-            if attempt < max_retries:
-                time.sleep(delay_seconds)
+            sleep_time = min(max_delay_cap, base_delay * (2 ** attempt))
+            
+            logger.warning(f"[DynamoDB] Falha na conexão (tentativa {attempt + 1}). Erro: {exc}")
+            
+            if attempt < max_retries - 1:
+                logger.info(f"[DynamoDB] Aguardando {sleep_time}s antes da próxima tentativa (Backoff)...")
+                time.sleep(sleep_time)
     
-    logger.critical("Falha crítica ao conectar ao DynamoDB após várias tentativas.")
+    logger.critical("Falha crítica ao conectar ao DynamoDB após várias tentativas com backoff.")
     raise last_exception if last_exception else RuntimeError("Falha crítica no DynamoDB")
 
 dynamodb = connect_with_retry()

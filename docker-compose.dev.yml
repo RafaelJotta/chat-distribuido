@@ -47,10 +47,5 @@ services:
     container_name: dynamodb-local
     ports:
       - "8000:8000" # Porta padrão do DynamoDB Local
-    # ALTERADO: Usa -inMemory em vez de -dbPath e remove o volume
     command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
-    # volumes: # Linha removida - não salva dados em disco neste modo
-    #   - dynamodb-data:/data # Linha removida
 
-# volumes: # Seção removida ou comentada pois não há mais volumes persistentes aqui
-#   dynamodb-data: # Linha removida

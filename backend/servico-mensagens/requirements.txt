@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
-# motor # REMOVIDO
 python-multipart
 websockets
 pydantic

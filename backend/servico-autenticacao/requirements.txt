@@ -1,7 +1,6 @@
 fastapi
 uvicorn[standard]
 httpx
-# motor # REMOVIDO
 python-multipart
 fastapi-cors
 pydantic[email]

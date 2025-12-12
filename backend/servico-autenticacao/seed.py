@@ -3,24 +3,15 @@ import json
 import time
 import boto3
 from datetime import datetime, timedelta
-# ✅ *** NOVO: Importa a classe de erro do Boto3 ***
 from botocore.exceptions import ClientError 
 
-# --- Configuração ---
 
-# ✅ *** SEU INTERRUPTOR: Mude esta linha *** ✅
-# Mude para "production" para popular o banco da AWS (EC2).
-# Mude para "local" para popular o seu banco local (Docker).
 TARGET_ENV = "local"
-# ----------------------------------------------------
 
-# ❗️❗️ Coloque o IP público do seu servidor EC2 aqui
-# (Este é o IP que você acessa no navegador, ex: 54.221.74.94)
 YOUR_EC2_IP = "54.221.74.94" 
 
-# --- Definições de Ambiente (Não mexa aqui) ---
 MENSAGENS_TABLE_NAME = 'ChatMensagens'
-CONTADORES_TABLE_NAME = 'ChatContadores' # Necessário para o init_counters
+CONTADORES_TABLE_NAME = 'ChatContadores' 
 DYNAMO_ARGS = {}
 BASE_URL = ""
 
@@ -38,10 +29,8 @@ else:
     BASE_URL = f"http://{YOUR_EC2_IP}:8080" # API Gateway na AWS
     DYNAMO_ARGS = {
         'region_name': 'us-east-1'
-        # (O Boto3 vai usar as credenciais do seu 'aws configure' local)
     }
 
-# --- Listas de Usuários e Mensagens (sem alteração) ---
 users_to_create = [
     {"email": "adm@empresa.com", "password": "adm", "name": "Thiago Caproni", "role": "director", "manager_id": None},
     {"email": "alessandro@empresa.com", "password": "123", "name": "Alessandro Augusto", "role": "manager", "manager_id": "dir-1"},
@@ -64,12 +53,9 @@ messages_to_create = [
     }
 ]
 
-# ✅ *** NOVO: Função 'init_counters' (Funciona em ambos os ambientes) ***
 def init_counters():
-    """Inicializa os contadores no DynamoDB"""
     print(f"--- Inicializando Contadores ({TARGET_ENV}) ---")
     try:
-        # Usa os DYNAMO_ARGS corretos para o ambiente
         dynamodb = boto3.resource('dynamodb', **DYNAMO_ARGS)
         table = dynamodb.Table(CONTADORES_TABLE_NAME)
         roles = ['director', 'manager', 'supervisor', 'employee']
@@ -99,11 +85,9 @@ def seed_users():
         except requests.exceptions.RequestException as e:
             print(f"Não foi possível conectar ao serviço de autenticação em {BASE_URL}: {e}")
 
-# ✅ *** CORRIGIDO: Função 'seed_messages' (Usa DYNAMO_ARGS) ***
 def seed_messages():
     print(f"\n--- Iniciando Povoamento de Mensagens ({TARGET_ENV}) ---")
     try:
-        # Usa os DYNAMO_ARGS corretos para o ambiente
         dynamodb = boto3.resource('dynamodb', **DYNAMO_ARGS)
         table = dynamodb.Table(MENSAGENS_TABLE_NAME)
         
@@ -121,14 +105,13 @@ def seed_messages():
         print(f"Erro ao popular mensagens no DynamoDB: {e}")
 
 
-# ✅ *** CORRIGIDO: 'seed_database' (Chama init_counters) ***
 def seed_database():
     print(f"Aguardando os serviços subirem... (10s)")
     time.sleep(10)
     
-    init_counters() # Primeiro, zera/cria os contadores
-    seed_users()    # Segundo, cria os usuários
-    seed_messages() # Terceiro, adiciona mensagens
+    init_counters() 
+    seed_users()    
+    seed_messages()
 
 if __name__ == "__main__":
     seed_database()
