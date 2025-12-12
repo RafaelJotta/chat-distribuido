@@ -9,7 +9,6 @@ interface ChatTabsProps {
   activeChatId: string | null;
   onSelectChat: (chatId: string) => void;
   onCloseChat: (chatId: string) => void;
-  // ✅ *** NOVO PASSO 3.D *** ✅
   unreadCounts: Record<string, number>;
 }
 
@@ -18,7 +17,6 @@ export const ChatTabs: React.FC<ChatTabsProps> = ({
   activeChatId, 
   onSelectChat, 
   onCloseChat,
-  // ✅ *** NOVO PASSO 3.E *** ✅
   unreadCounts
 }) => {
   if (openChats.length === 0) {
@@ -29,8 +27,6 @@ export const ChatTabs: React.FC<ChatTabsProps> = ({
     <div className="bg-slate-800 h-10 flex items-center px-2 gap-2 flex-shrink-0">
       {openChats.map((chat) => {
         const isActive = chat.id === activeChatId;
-        // ✅ *** NOVO PASSO 3.F *** ✅
-        // Pega a contagem para este chat específico
         const count = unreadCounts[chat.id] || 0;
 
         return (
@@ -50,8 +46,7 @@ export const ChatTabs: React.FC<ChatTabsProps> = ({
             )}
             <span className="text-sm font-medium whitespace-nowrap">{chat.name}</span>
             
-            {/* ✅ *** NOVO PASSO 3.G *** ✅
-            // Renderiza o badge se a contagem for maior que 0 */}
+            {}
             {count > 0 && (
               <span className="ml-2 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
                 {count}

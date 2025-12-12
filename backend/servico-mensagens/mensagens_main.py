@@ -11,21 +11,22 @@ from contextlib import asynccontextmanager
 import time
 import logging
 
-# --- Configuração de Logs ---
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("msg-service")
 
-def connect_with_retry(max_retries: int = 5, delay_seconds: int = 3):
-    """Tenta criar o recurso DynamoDB com retries simples e logs."""
+IS_LOCAL = os.getenv("IS_LOCAL", "false").lower() == "true"
+
+def connect_with_retry(max_retries: int = 6, base_delay: int = 1, max_delay_cap: int = 32):
+  
     last_exception = None
 
-    for attempt in range(1, max_retries + 1):
+    for attempt in range(max_retries):
         try:
             if IS_LOCAL:
-                logger.info(f"[DynamoDB] Tentativa {attempt}/{max_retries} - Conectando ao DynamoDB Local...")
+                logger.info(f"[DynamoDB] Tentativa {attempt + 1}/{max_retries} - Conectando ao DynamoDB Local...")
                 return boto3.resource(
                     'dynamodb',
                     endpoint_url='http://dynamodb-local:8000',
@@ -34,21 +35,21 @@ def connect_with_retry(max_retries: int = 5, delay_seconds: int = 3):
                     aws_secret_access_key='dummysecret'
                 )
             else:
-                logger.info(f"[DynamoDB] Tentativa {attempt}/{max_retries} - Conectando ao AWS DynamoDB...")
+                logger.info(f"[DynamoDB] Tentativa {attempt + 1}/{max_retries} - Conectando ao AWS DynamoDB...")
                 return boto3.resource('dynamodb', region_name='us-east-1')
+        
         except Exception as exc:
             last_exception = exc
-            logger.warning(f"[DynamoDB] Erro de conexão (tentativa {attempt}/{max_retries}): {exc}")
+            sleep_time = min(max_delay_cap, base_delay * (2 ** attempt))
+            
+            logger.warning(f"[DynamoDB] Erro de conexão (tentativa {attempt + 1}/{max_retries}): {exc}")
 
-            if attempt < max_retries:
-                logger.info(f"[DynamoDB] Aguardando {delay_seconds}s antes de tentar novamente...")
-                time.sleep(delay_seconds)
+            if attempt < max_retries - 1:
+                logger.info(f"[DynamoDB] Aguardando {sleep_time}s antes de tentar novamente (Backoff)...")
+                time.sleep(sleep_time)
 
     logger.critical("[DynamoDB] Todas as tentativas de conexão falharam. Abortando.")
     raise last_exception if last_exception else RuntimeError("Falha desconhecida ao conectar ao DynamoDB")
-
-# --- Configuração do Banco ---
-IS_LOCAL = os.getenv("IS_LOCAL", "false").lower() == "true"
 
 if IS_LOCAL:
     logger.info(">>> MODO DE DESENVOLVIMENTO: Iniciando <<<")
@@ -61,7 +62,6 @@ HIERARQUIA_TABLE = dynamodb.Table('ChatHierarquia')
 MENSAGENS_TABLE = dynamodb.Table('ChatMensagens')
 READ_RECEIPTS_TABLE = dynamodb.Table('ChatReadReceipts')
 
-# --- Lifespan ---
 def create_table_if_not_exists(table_name, key_schema, attribute_definitions):
     try:
         dynamodb.create_table(TableName=table_name, KeySchema=key_schema, AttributeDefinitions=attribute_definitions, ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5})
@@ -79,13 +79,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 active_connections: Dict[str, WebSocket] = {}
 
-# ✅ Middleware de Logs
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
     response = await call_next(request)
     process_time = time.time() - start_time
-    # Ignora logs do health check para não poluir o terminal, se desejar
     if request.url.path != "/health":
         logger.info(f"REQ: {request.method} {request.url.path} - Status: {response.status_code} - Tempo: {process_time:.4f}s")
     return response
@@ -250,8 +248,6 @@ async def user_connected(info: UserInfo):
     logger.info(f"Notificação Interna: User connected {info.id}")
     return {"message": "Notification received"}
 
-# ✅ Endpoint de Health Check (Novo)
 @app.get("/health")
 async def health_check():
-    """Retorna status 200 se o serviço estiver online."""
     return {"status": "OK", "service": "mensagens"}

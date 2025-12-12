@@ -1,6 +1,4 @@
-# docker-compose.yml (Versão final para AWS)
 services:
-  # API Gateway é o ponto de entrada único
   api-gateway:
     build: ./api-gateway
     image: 151567229120.dkr.ecr.us-east-1.amazonaws.com/chat-api-gateway:latest
@@ -25,7 +23,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Serviço de Mensagens em Python com WebSocket
   servico-mensagens:
     build:
       context: ./backend/servico-mensagens
@@ -33,7 +30,6 @@ services:
     restart: always
     expose:
       - "18081"
-    # ✅ NOVO: Healthcheck adicionado
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:18081/health"]
       interval: 10s
@@ -43,7 +39,6 @@ services:
       servico-autenticacao:
         condition: service_healthy
 
-  # Frontend React servido por Nginx
   frontend:
     build:
       context: ./frontend
