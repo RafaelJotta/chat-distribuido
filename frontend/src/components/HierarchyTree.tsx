@@ -1,14 +1,13 @@
 // src/components/HierarchyTree.tsx
 
 import React, { useState, useEffect } from 'react';
-// MUDANÇA: Importando novos ícones para moderação
 import { ChevronRight, ChevronDown, Crown, Shield, User, MicOff, UserX } from 'lucide-react';
 import { HierarchyNode, User as UserType } from '../types';
 
 interface HierarchyTreeProps {
   nodes: HierarchyNode[];
   onNodeSelect: (node: HierarchyNode) => void;
-  currentUser: UserType; // MUDANÇA: Recebe o usuário atual
+  currentUser: UserType;
 }
 
 const getRoleIcon = (role: string) => {

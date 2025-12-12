@@ -15,7 +15,6 @@ interface DirectoryListProps {
   data: DirectoryData;
   onNodeSelect: (node: HierarchyNode) => void;
   currentUser: UserType;
-  // ✅ *** NOVO PASSO (FEATURE): Adiciona a prop *** ✅
   userUnreadCounts: Record<string, number>;
 }
 
@@ -36,14 +35,12 @@ const StatusIndicatorDot: React.FC<{ status?: UserType['status'] }> = ({ status 
     return <div className={`w-2 h-2 rounded-full ${color} flex-shrink-0`}></div>;
 };
 
-// ✅ *** NOVO PASSO (FEATURE): DirectoryRow agora usa a contagem *** ✅
 const DirectoryRow: React.FC<{
   node: HierarchyNode, 
   onNodeSelect: (node: HierarchyNode) => void,
   userUnreadCounts: Record<string, number>
 }> = ({node, onNodeSelect, userUnreadCounts}) => {
     
-    // Pega a contagem para este usuário específico
     const count = userUnreadCounts[node.id] || 0;
 
     return (
@@ -57,7 +54,7 @@ const DirectoryRow: React.FC<{
                 {node.name}
             </span>
             
-            {/* Renderiza o badge de contagem se for maior que 0 */}
+            {}
             {count > 0 && (
               <span className="bg-red-600 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
                 {count}
@@ -67,7 +64,6 @@ const DirectoryRow: React.FC<{
     );
 };
 
-// ✅ *** NOVO PASSO (FEATURE): Repassa a prop *** ✅
 const CategorySection: React.FC<{
   title: string, 
   users: HierarchyNode[], 
@@ -98,14 +94,13 @@ const CategorySection: React.FC<{
   );
 };
 
-// ✅ *** NOVO PASSO (FEATURE): Repassa a prop *** ✅
 export const DirectoryList: React.FC<DirectoryListProps> = ({ data, onNodeSelect, currentUser, userUnreadCounts }) => {
   const { director, managers, supervisors, employees } = data;
   const role = currentUser.role;
 
   return (
     <div className="space-y-2">
-      {/* Repassa 'userUnreadCounts' para cada Categoria */}
+      {}
       {(role === 'director' || role === 'manager') && (
         <>
           {director && role === 'manager' && <CategorySection title="DIRETORIA" users={[director]} currentUser={currentUser} onNodeSelect={onNodeSelect} userUnreadCounts={userUnreadCounts} />}

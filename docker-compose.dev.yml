@@ -1,5 +1,4 @@
 services:
-  # Serviço de Frontend com Hot Reload
   frontend:
     build:
       context: ./frontend
@@ -8,44 +7,33 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Impede que o node_modules local sobrescreva o do container
+      - /app/node_modules
     command: npm run dev -- --host
 
-  # API Gateway (Nginx)
   api-gateway:
     build: ./api-gateway
     ports:
       - "8080:80"
-    depends_on:
-      - frontend
-      - servico-autenticacao
-      - servico-mensagens
+    volumes:
+      - ./api-gateway/nginx.dev.conf:/etc/nginx/nginx.conf
 
-  # Serviço de Autenticação com Reload
   servico-autenticacao:
     build: ./backend/servico-autenticacao
     volumes:
       - ./backend/servico-autenticacao:/app
     environment:
-      - IS_LOCAL=true # Informa ao Python para usar o banco local
-    depends_on:
-      - dynamodb-local # Depende do banco local
+      - IS_LOCAL=true
 
-  # Serviço de Mensagens com Reload
   servico-mensagens:
     build: ./backend/servico-mensagens
     volumes:
       - ./backend/servico-mensagens:/app
     environment:
-      - IS_LOCAL=true # Informa ao Python para usar o banco local
-    depends_on:
-      - dynamodb-local # Depende do banco local
+      - IS_LOCAL=true
 
-  # DynamoDB Local (Modo Em Memória)
   dynamodb-local:
     image: amazon/dynamodb-local:latest
     container_name: dynamodb-local
     ports:
-      - "8000:8000" # Porta padrão do DynamoDB Local
+      - "8000:8000"
     command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
-
